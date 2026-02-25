@@ -13,7 +13,7 @@ services:
       OLLAMA_API_KEY: ${OLLAMA_API_KEY:-ollama-local}
     volumes:
       - ${OPENCLAW_CONFIG_DIR:-./config}:/home/node/.openclaw
-      - ${OPENCLAW_WORKSPACE_DIR:-./data/workspace}:/home/node/.openclaw/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
       - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
@@ -24,13 +24,9 @@ services:
     networks:
       - openclaw-net
     command:
-      - node
-      - dist/index.js
-      - gateway
-      - --bind
-      - "lan"
-      - --port
-      - "18789"
+      - sh
+      - -c
+      - "node /home/node/.openclaw/patch-exec-host.js && node dist/index.js gateway --bind lan --port 18789"
 
   openclaw-cli:
     image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:main}
@@ -43,7 +39,6 @@ services:
       BROWSER: echo
     volumes:
       - ${OPENCLAW_CONFIG_DIR:-./config}:/home/node/.openclaw
-      - ${OPENCLAW_WORKSPACE_DIR:-./data/workspace}:/home/node/.openclaw/workspace
     extra_hosts:
       - "host.docker.internal:host-gateway"
     stdin_open: true

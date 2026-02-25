@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "socket": {
+    "path": "/home/node/.openclaw/exec-approvals.sock",
+    "token": "C_LWZh0eFIVmR3flyDej14q63Q-Ne3oy"
+  },
+  "defaults": {},
+  "agents": {
+    "test": {
+      "allowlist": [
+        {
+          "id": "3d1941bd-3aba-4c22-973a-53b844644cba",
+          "pattern": "/usr/bin/echo",
+          "lastUsedAt": 1772036248644,
+          "lastUsedCommand": "echo test-workspace-ok",
+          "lastResolvedPath": "/usr/bin/echo"
+        }
+      ]
+    }
+  }
+}

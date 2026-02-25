@@ -60,8 +60,9 @@ docker compose --profile cli run --rm openclaw-cli dashboard --no-open
 | `openclaw-cli`     | CLI（`--profile cli` で利用）           |
 | ホストの Ollama    | ローカル LLM（deepseek-r1:32b など）   |
 
-- 設定: `config/openclaw.json`（Ollama の baseUrl は `host.docker.internal:11434`）
-- ワークスペース: `data/workspace`
+- 設定・ワークスペース一式: `config/`（OPENCLAW_CONFIG_DIR）
+  - 設定: `openclaw.json`, `agents/`, `devices/` など
+  - ワークスペース: `config/workspace`（main）、`config/workspace-test`（test）。エージェント追加時は `config/workspace-<agentId>` を置けばよく、compose の変更は不要
 - ゲートウェイはブリッジ＋ポートマッピングでホストの `localhost:18789` に公開
 
 ## OPENCLAW_GATEWAY_TOKEN について

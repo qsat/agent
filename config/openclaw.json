@@ -8,10 +8,17 @@
       ]
     }
   },
+  "tools": {
+    "exec": {
+      "host": "gateway",
+      "security": "full"
+    }
+  },
   "agents": {
     "defaults": {
       "model": {
-        "primary": "ollama/llama3.3:70b-instruct-q3_K_S"
+        "primary": "ollama/gpt-oss:20b",
+        "fallbacks": ["ollama/llama3.3:70b-instruct-q3_K_S"]
       }
     }
   },
@@ -23,6 +30,15 @@
         "apiKey": "ollama-local",
         "api": "ollama",
         "models": [
+          {
+            "id": "gpt-oss:20b",
+            "name": "GPT-OSS 20B",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 32768,
+            "maxTokens": 8192
+          },
           {
             "id": "llama3.3:70b-instruct-q3_K_S",
             "name": "Llama 3.3 70B Instruct",
