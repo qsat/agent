@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { slackClient } from "../api.js";
+import { slackBotClient } from "../api.js";
 
 describe("slackClient", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
@@ -18,7 +18,7 @@ describe("slackClient", () => {
       }),
     });
 
-    const client = slackClient({
+    const client = slackBotClient({
       token: "xoxb-token",
       baseUrl: "https://slack.com/api",
     });
@@ -46,7 +46,7 @@ describe("slackClient", () => {
       json: async () => ({ ok: true, channels: [] }),
     });
 
-    const client = slackClient({
+    const client = slackBotClient({
       token: "xoxb-token",
       baseUrl: "https://slack.com/api",
     });
@@ -72,7 +72,7 @@ describe("slackClient", () => {
       }),
     });
 
-    const client = slackClient({
+    const client = slackBotClient({
       token: "xoxb-token",
       baseUrl: "https://slack.com/api",
     });

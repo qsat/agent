@@ -6,8 +6,12 @@ Slack API を叩く CLI。チャンネル一覧・会話一覧の取得とメッ
 
 | 変数 | 必須 | 説明 |
 |------|------|------|
-| `SLACK_BOT_TOKEN` または `SLACK_TOKEN` | はい | Slack Bot Token（`xoxb-...`） |
+| `SLACK_BOT_TOKEN` | どちらか | Bot Token（`xoxb-...`）。チャンネル一覧・投稿・reactions などで利用。 |
+| `SLACK_USER_TOKEN` | どちらか | User Token（`xoxp-...`）。**mentions（自分宛メンション検索）で利用。** `search:read` が必要。 |
+| `SLACK_TOKEN` | どちらか | 上記のどちらか一方だけ設定する場合はこれでも可。 |
 | `SLACK_API_BASE_URL` | いいえ | API のベース URL。未設定時は `https://slack.com/api` |
+
+**両方設定する場合**: mentions は `SLACK_USER_TOKEN`（または `SLACK_TOKEN`）を、それ以外のコマンドは `SLACK_BOT_TOKEN` を優先して使います。
 
 ## ビルド
 
@@ -34,6 +38,7 @@ node dist/index.js
 
 ```bash
 export SLACK_BOT_TOKEN=xoxb-...
+# または SLACK_USER_TOKEN / SLACK_TOKEN でも可
 node dist/index.js channels list
 ```
 
@@ -47,18 +52,20 @@ node dist/index.js conversations list
 
 ### 自分へのメンション
 
-自分をメンションしているメッセージを検索する。**User token** と `search:read` スコープが必要（Bot token では利用できない）。
+自分をメンションしているメッセージを検索する。**User Token**（`SLACK_USER_TOKEN` または `SLACK_TOKEN`）と `search:read` スコープが必要。
 
 ```bash
-node dist/index.js mentions
+export SLACK_USER_TOKEN=xoxp-...
+node dist/index.js mentions --oldest 1508284197.000015 --latest 1508360597.000000
 ```
 
-### 自分のメッセージへのリアクション
+### Bot へのメンション
 
-自分が投稿したメッセージのうち、誰かがリアクションを付けたものを一覧する。参加中のチャンネル・DM の直近履歴から収集する。
+Bot をメンションしているメッセージを、Bot が参加しているチャンネルの履歴から収集する。**Bot Token** を使用。
 
 ```bash
-node dist/index.js reactions
+export SLACK_BOT_TOKEN=xoxb-...
+node dist/index.js mentions-bot --oldest 1508284197.000015 --latest 1508360597.000000
 ```
 
 ### メッセージ投稿
@@ -80,31 +87,45 @@ node dist/index.js post --channel C01234567 --text "Hello" --confirm
 set -a && source .env && set +a
 node packages/slack-cli/dist/index.js channels list
 
-# または env で渡す
+# または env で渡す（Bot / User のどちらでも可）
 SLACK_BOT_TOKEN=xoxb-... node packages/slack-cli/dist/index.js channels list
+SLACK_USER_TOKEN=xoxp-... node packages/slack-cli/dist/index.js mentions --oldest 1508284197.000015 --latest 1508360597.000000
 ```
 
 ## プログラムから利用する場合
 
-`api.ts` の `slackClient(opt)` は `process.env` に依存しない。トークンとオプションでベース URL を渡す。
+`api.ts` では **slackUserClient**（User Token 用）と **slackBotClient**（Bot Token 用）を export している。いずれも `process.env` に依存せず、`token` と `baseUrl` を渡す。
 
-**特定のメッセージより後のメッセージを取得する**: `getChannelHistory` の `oldest` に、基準にしたいメッセージの `ts`（例: `"1508284197.000015"`）を指定する。`latest` で「この ts より前」に絞ることもできる。
+- **slackUserClient(opt)** … `getMentionsToMe`（自分宛メンション検索）を含む。token には `xoxp-...` を渡す。
+- **slackBotClient(opt)** … チャンネル一覧・投稿・履歴・`getMentionsToBot`（Bot 宛メンション収集）など。token には `xoxb-...` を渡す。
+
+**特定の期間のメッセージを取得する**: `getChannelHistory` で `oldest` と `latest`（Unix ts 文字列）を必須で指定する。
 
 ```ts
-import { slackClient } from "./api.js";
+import { slackUserClient, slackBotClient } from "./api.js";
 
-const client = slackClient({
+const bot = slackBotClient({
   token: "xoxb-...",
-  baseUrl: "https://slack.com/api", // 省略時はこのデフォルト
+  baseUrl: "https://slack.com/api",
 });
+const channels = await bot.listChannels();
+await bot.postMessage("C01234567", "Hello");
 
-const channels = await client.listChannels();
-const result = await client.postMessage("C01234567", "Hello");
-
-// 特定メッセージ（ts）より後のメッセージを取得
-const history = await client.getChannelHistory({
+const history = await bot.getChannelHistory({
   channel: "C01234567",
   oldest: "1508284197.000015",
+  latest: "1508360597.000000",
   limit: 50,
 });
+
+const user = slackUserClient({ token: "xoxp-...", baseUrl: "https://slack.com/api" });
+const mentions = await user.getMentionsToMe({
+  oldest: "1508284197.000015",
+  latest: "1508360597.000000",
+});
+
+const botMentions = await bot.getMentionsToBot({
+  oldest: "1508284197.000015",
+  latest: "1508360597.000000",
+}); // Bot へのメンション（参加チャンネルから収集）
 ```

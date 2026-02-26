@@ -1,8 +1,28 @@
 import minimist from "minimist";
-import { slackClient } from "./api.js";
+import { slackUserClient, slackBotClient } from "./api.js";
 
-function getToken(): string | undefined {
-  return process.env.SLACK_BOT_TOKEN ?? process.env.SLACK_TOKEN;
+/** メンション検索など User Token 向けコマンド用。SLACK_USER_TOKEN を優先。 */
+function getTokenForUserScoped(): string | undefined {
+  return (
+    process.env.SLACK_USER_TOKEN ??
+    process.env.SLACK_TOKEN ??
+    process.env.SLACK_BOT_TOKEN
+  );
+}
+
+/** チャンネル一覧・投稿など Bot Token で十分なコマンド用。SLACK_BOT_TOKEN を優先。 */
+function getTokenForBotScoped(): string | undefined {
+  return (
+    process.env.SLACK_BOT_TOKEN ??
+    process.env.SLACK_USER_TOKEN ??
+    process.env.SLACK_TOKEN
+  );
+}
+
+/** コマンドに応じて使うトークンを返す。mentions は User Token、mentions-bot 含むそれ以外は Bot Token 優先。 */
+function getToken(sub: string | undefined): string | undefined {
+  if (sub === "mentions") return getTokenForUserScoped();
+  return getTokenForBotScoped();
 }
 
 const SLACK_API_DEFAULT_BASE_URL = "https://slack.com/api";
@@ -16,7 +36,14 @@ function out(obj: unknown) {
 }
 
 function err(msg: string | Error): never {
-  console.error(msg);
+  if (msg instanceof Error) {
+    console.error(msg.message);
+    if (msg.stack) {
+      console.error(msg.stack);
+    }
+  } else {
+    console.error(msg);
+  }
   process.exit(1);
 }
 
@@ -30,8 +57,8 @@ type Parsed = (
       kind: "conversations";
       action: "list";
     }
-  | { kind: "mentions" }
-  | { kind: "reactions" }
+  | { kind: "mentions"; oldest: string; latest: string }
+  | { kind: "mentions-bot"; oldest: string; latest: string }
   | {
       kind: "post";
       channel: string;
@@ -42,6 +69,10 @@ type Parsed = (
 ) & {
   token: string;
   baseUrl: string;
+  /** mentions-bot 用。Unix ts（必須） */
+  oldest?: string;
+  /** mentions-bot 用。Unix ts（必須） */
+  latest?: string;
 };
 
 /**
@@ -51,30 +82,42 @@ function parseArgs(): Parsed {
   const argv = minimist(process.argv.slice(2), { boolean: ["confirm"] });
   const [sub, cmd, ...rest] = argv._ as string[];
   const confirm = Boolean(argv.confirm);
-  const token = getToken();
+  const oldest = argv.oldest ?? argv["oldest"];
+  const latest = argv.latest ?? argv["latest"];
+  const token = getToken(sub);
   const baseUrl = getSlackApiBaseUrl();
   if (!token) {
-    err("SLACK_BOT_TOKEN or SLACK_TOKEN must be set");
+    err(
+      "Set SLACK_BOT_TOKEN and/or SLACK_USER_TOKEN (or SLACK_TOKEN). mentions requires User Token.",
+    );
   }
 
+  const common = { token, baseUrl, oldest, latest };
+
   if (!sub || sub === "help" || argv.help || argv.h) {
-    return { kind: "help", token, baseUrl };
+    return { kind: "help", ...common };
   }
 
   if (sub === "channels" && cmd === "list") {
-    return { kind: "channels", action: "list", token, baseUrl };
+    return { kind: "channels", action: "list", ...common };
   }
 
   if (sub === "conversations" && cmd === "list") {
-    return { kind: "conversations", action: "list", token, baseUrl };
+    return { kind: "conversations", action: "list", ...common };
   }
 
   if (sub === "mentions") {
-    return { kind: "mentions", token, baseUrl };
+    if (oldest === undefined || latest === undefined) {
+      err("mentions requires --oldest <ts> and --latest <ts> (Unix timestamp).");
+    }
+    return { kind: "mentions", ...common, oldest, latest };
   }
 
-  if (sub === "reactions") {
-    return { kind: "reactions", token, baseUrl };
+  if (sub === "mentions-bot") {
+    if (oldest === undefined || latest === undefined) {
+      err("mentions-bot requires --oldest <ts> and --latest <ts> (Unix timestamp).");
+    }
+    return { kind: "mentions-bot", ...common, oldest, latest };
   }
 
   if (sub === "post") {
@@ -83,10 +126,10 @@ function parseArgs(): Parsed {
     if (!channel || !text) {
       err("Usage: post --channel <id> --text <message> [--confirm]");
     }
-    return { kind: "post", token, baseUrl, channel, text, confirm };
+    return { kind: "post", ...common, channel, text, confirm };
   }
 
-  return { kind: "unknown", sub, cmd, token, baseUrl };
+  return { kind: "unknown", sub, cmd, ...common };
 }
 
 function showHelp(): void {
@@ -95,19 +138,24 @@ function showHelp(): void {
     commands: [
       "channels list                    - list channels",
       "conversations list                - list conversations (channels + DMs)",
-      "mentions                         - list messages that mention you",
-      "reactions                        - list reactions on your messages",
+      "mentions --oldest <ts> --latest <ts>      - list messages that mention you (User Token)",
+      "mentions-bot --oldest <ts> --latest <ts>   - list messages that mention the bot (Bot Token)",
       "post --channel <id> --text <msg> [--confirm] - post message (use --confirm to execute)",
     ],
-    env: "SLACK_BOT_TOKEN or SLACK_TOKEN (required), SLACK_API_BASE_URL (optional, default: https://slack.com/api)",
+    env: "SLACK_BOT_TOKEN, SLACK_USER_TOKEN, or SLACK_TOKEN (mentions は User Token 推奨). SLACK_API_BASE_URL (optional)",
   });
 }
 
 /**
  * パース済みの情報だけを引数で受け、メイン処理を行う。argv は参照しない。
+ * mentions は User Token 用の client、それ以外は Bot Token 用の client を使う。
  */
 async function run(parsed: Parsed): Promise<void> {
-  const client = slackClient({ token: parsed.token, baseUrl: parsed.baseUrl });
+  const opt = { token: parsed.token, baseUrl: parsed.baseUrl };
+  const isUserScoped = parsed.kind === "mentions";
+  const client = isUserScoped
+    ? slackUserClient(opt)
+    : slackBotClient(opt);
 
   switch (parsed.kind) {
     case "help":
@@ -124,12 +172,18 @@ async function run(parsed: Parsed): Promise<void> {
     }
 
     case "mentions": {
-      const res = await client.getMentionsToMe();
+      const res = await slackUserClient(opt).getMentionsToMe({
+        oldest: parsed.oldest,
+        latest: parsed.latest,
+      });
       return out(res);
     }
 
-    case "reactions": {
-      const res = await client.getReactionsToMyMessages();
+    case "mentions-bot": {
+      const res = await slackBotClient(opt).getMentionsToBot({
+        oldest: parsed.oldest,
+        latest: parsed.latest,
+      });
       return out(res);
     }
 
@@ -155,6 +209,6 @@ async function run(parsed: Parsed): Promise<void> {
   }
 }
 
-(async (): Promise<void> => await run(parseArgs()))().catch((e) => {
-  err(e);
+(async (): Promise<void> => await run(parseArgs()))().catch((e: unknown) => {
+  err(e instanceof Error ? e : new Error(String(e)));
 });
