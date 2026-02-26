@@ -45,6 +45,22 @@ node dist/index.js channels list
 node dist/index.js conversations list
 ```
 
+### 自分へのメンション
+
+自分をメンションしているメッセージを検索する。**User token** と `search:read` スコープが必要（Bot token では利用できない）。
+
+```bash
+node dist/index.js mentions
+```
+
+### 自分のメッセージへのリアクション
+
+自分が投稿したメッセージのうち、誰かがリアクションを付けたものを一覧する。参加中のチャンネル・DM の直近履歴から収集する。
+
+```bash
+node dist/index.js reactions
+```
+
 ### メッセージ投稿
 
 **書き込みはユーザー確認必須。** まず `--confirm` を付けずに実行すると、実行予定の内容だけが JSON で出る（dry-run）。内容を確認し、問題なければ同じコマンドに `--confirm` を付けて再実行する。
@@ -72,6 +88,8 @@ SLACK_BOT_TOKEN=xoxb-... node packages/slack-cli/dist/index.js channels list
 
 `api.ts` の `slackClient(opt)` は `process.env` に依存しない。トークンとオプションでベース URL を渡す。
 
+**特定のメッセージより後のメッセージを取得する**: `getChannelHistory` の `oldest` に、基準にしたいメッセージの `ts`（例: `"1508284197.000015"`）を指定する。`latest` で「この ts より前」に絞ることもできる。
+
 ```ts
 import { slackClient } from "./api.js";
 
@@ -82,4 +100,11 @@ const client = slackClient({
 
 const channels = await client.listChannels();
 const result = await client.postMessage("C01234567", "Hello");
+
+// 特定メッセージ（ts）より後のメッセージを取得
+const history = await client.getChannelHistory({
+  channel: "C01234567",
+  oldest: "1508284197.000015",
+  limit: 50,
+});
 ```

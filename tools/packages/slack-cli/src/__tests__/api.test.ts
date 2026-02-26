@@ -18,7 +18,10 @@ describe("slackClient", () => {
       }),
     });
 
-    const client = slackClient({ token: "xoxb-token" });
+    const client = slackClient({
+      token: "xoxb-token",
+      baseUrl: "https://slack.com/api",
+    });
     const result = (await client.listChannels()) as Record<string, unknown>;
     expect(result.ok).toBe(true);
     expect((result.channels as unknown[])[0]).toEqual({
@@ -26,8 +29,9 @@ describe("slackClient", () => {
       name: "general",
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://slack.com/api/conversations.list?limit=200&types=public_channel,private_channel",
+      "https://slack.com/api/conversations.list?limit=10&types=public_channel%2Cprivate_channel",
       expect.objectContaining({
+        method: "GET",
         headers: expect.objectContaining({
           Authorization: "Bearer xoxb-token",
           "Content-Type": "application/json; charset=utf-8",
@@ -42,11 +46,19 @@ describe("slackClient", () => {
       json: async () => ({ ok: true, channels: [] }),
     });
 
-    const client = slackClient({ token: "xoxb-token" });
+    const client = slackClient({
+      token: "xoxb-token",
+      baseUrl: "https://slack.com/api",
+    });
     await client.listConversations();
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://slack.com/api/conversations.list?limit=200",
-      expect.any(Object),
+      "https://slack.com/api/conversations.list?limit=10",
+      expect.objectContaining({
+        method: "GET",
+        headers: expect.objectContaining({
+          Authorization: "Bearer xoxb-token",
+        }),
+      }),
     );
   });
 
@@ -60,7 +72,10 @@ describe("slackClient", () => {
       }),
     });
 
-    const client = slackClient({ token: "xoxb-token" });
+    const client = slackClient({
+      token: "xoxb-token",
+      baseUrl: "https://slack.com/api",
+    });
     const result = (await client.postMessage("C123", "hello")) as Record<
       string,
       unknown

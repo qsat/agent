@@ -30,6 +30,8 @@ type Parsed = (
       kind: "conversations";
       action: "list";
     }
+  | { kind: "mentions" }
+  | { kind: "reactions" }
   | {
       kind: "post";
       channel: string;
@@ -67,6 +69,14 @@ function parseArgs(): Parsed {
     return { kind: "conversations", action: "list", token, baseUrl };
   }
 
+  if (sub === "mentions") {
+    return { kind: "mentions", token, baseUrl };
+  }
+
+  if (sub === "reactions") {
+    return { kind: "reactions", token, baseUrl };
+  }
+
   if (sub === "post") {
     const channel = argv.channel ?? rest[0];
     const text = argv.text ?? rest[1] ?? rest.slice(2).join(" ");
@@ -85,6 +95,8 @@ function showHelp(): void {
     commands: [
       "channels list                    - list channels",
       "conversations list                - list conversations (channels + DMs)",
+      "mentions                         - list messages that mention you",
+      "reactions                        - list reactions on your messages",
       "post --channel <id> --text <msg> [--confirm] - post message (use --confirm to execute)",
     ],
     env: "SLACK_BOT_TOKEN or SLACK_TOKEN (required), SLACK_API_BASE_URL (optional, default: https://slack.com/api)",
@@ -109,6 +121,16 @@ async function run(parsed: Parsed): Promise<void> {
     case "conversations": {
       const res = await client.listConversations();
       return out(res.channels ?? []);
+    }
+
+    case "mentions": {
+      const res = await client.getMentionsToMe();
+      return out(res);
+    }
+
+    case "reactions": {
+      const res = await client.getReactionsToMyMessages();
+      return out(res);
     }
 
     case "post": {
