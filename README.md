@@ -63,6 +63,7 @@ docker compose --profile cli run --rm openclaw-cli dashboard --no-open
 - 設定・ワークスペース一式: `config/`（OPENCLAW_CONFIG_DIR）
   - 設定: `openclaw.json`, `agents/`, `devices/` など
   - ワークスペース: `config/workspace`（main）、`config/workspace-test`（test）。エージェント追加時は `config/workspace-<agentId>` を置けばよく、compose の変更は不要
+  - スキル: `config/workspace/skills/` に GitHub・Slack・Confluence 読み・Jira 読み用スキルを配置。トークン・ホスト名は `.env` で管理（`.env.example` 参照）。Docker で `gh` を使う場合はイメージに `gh` を入れ、`GH_TOKEN` を環境変数で渡す
 - ゲートウェイはブリッジ＋ポートマッピングでホストの `localhost:18789` に公開
 
 ## OPENCLAW_GATEWAY_TOKEN について

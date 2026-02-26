@@ -51,5 +51,18 @@
         ]
       }
     }
+  },
+  "channels": {
+    "slack": {
+      "enabled": true
+    }
+  },
+  "skills": {
+    "entries": [
+      {"name": "github", "enabled": true},
+      {"name": "slack", "enabled": true},
+      {"name": "confluence-read", "enabled": true},
+      {"name": "jira-read", "enabled": true}
+    ]
   }
 }
