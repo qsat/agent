@@ -5,8 +5,10 @@ function getToken(): string | undefined {
   return process.env.SLACK_BOT_TOKEN ?? process.env.SLACK_TOKEN;
 }
 
-function getSlackApiBaseUrl(): string | undefined {
-  return process.env.SLACK_API ?? process.env.SLACK_API_BASE_URL;
+const SLACK_API_DEFAULT_BASE_URL = "https://slack.com/api";
+
+function getSlackApiBaseUrl(): string {
+  return process.env.SLACK_API_BASE_URL ?? SLACK_API_DEFAULT_BASE_URL;
 }
 
 function out(obj: unknown) {
@@ -49,10 +51,8 @@ function parseArgs(): Parsed {
   const confirm = Boolean(argv.confirm);
   const token = getToken();
   const baseUrl = getSlackApiBaseUrl();
-  if (!token || !baseUrl) {
-    err(
-      "SLACK_BOT_TOKEN or SLACK_TOKEN, and SLACK_API or SLACK_API_BASE_URL, must be set",
-    );
+  if (!token) {
+    err("SLACK_BOT_TOKEN or SLACK_TOKEN must be set");
   }
 
   if (!sub || sub === "help" || argv.help || argv.h) {
@@ -87,7 +87,7 @@ function showHelp(): void {
       "conversations list                - list conversations (channels + DMs)",
       "post --channel <id> --text <msg> [--confirm] - post message (use --confirm to execute)",
     ],
-    env: "SLACK_BOT_TOKEN or SLACK_TOKEN, SLACK_API or SLACK_API_BASE_URL (required)",
+    env: "SLACK_BOT_TOKEN or SLACK_TOKEN (required), SLACK_API_BASE_URL (optional, default: https://slack.com/api)",
   });
 }
 
@@ -133,8 +133,6 @@ async function run(parsed: Parsed): Promise<void> {
   }
 }
 
-const main = async (): Promise<void> => await run(parseArgs());
-
-main().catch((e) => {
+(async (): Promise<void> => await run(parseArgs()))().catch((e) => {
   err(e);
 });

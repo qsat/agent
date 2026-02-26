@@ -7,7 +7,7 @@ Slack API を叩く CLI。チャンネル一覧・会話一覧の取得とメッ
 | 変数 | 必須 | 説明 |
 |------|------|------|
 | `SLACK_BOT_TOKEN` または `SLACK_TOKEN` | はい | Slack Bot Token（`xoxb-...`） |
-| `SLACK_API` または `SLACK_API_BASE_URL` | いいえ | API のベース URL。未設定時は `https://slack.com/api` |
+| `SLACK_API_BASE_URL` | いいえ | API のベース URL。未設定時は `https://slack.com/api` |
 
 ## ビルド
 

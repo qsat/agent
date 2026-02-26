@@ -43,7 +43,7 @@ function channelsList(
   return slackFetch(
     baseUrl,
     token,
-    "/conversations.list?limit=200&types=public_channel,private_channel",
+    "/conversations.list?limit=10&types=public_channel,private_channel",
   );
 }
 
@@ -51,7 +51,7 @@ function conversationsList(
   baseUrl: string,
   token: string,
 ): Promise<Record<string, unknown>> {
-  return slackFetch(baseUrl, token, "/conversations.list?limit=200");
+  return slackFetch(baseUrl, token, "/conversations.list?limit=10");
 }
 
 function chatPostMessage(
