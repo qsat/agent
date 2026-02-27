@@ -2,6 +2,8 @@
  * Slack API への HTTP リクエストを行う fetch ラッパー。
  */
 
+import { SlackEndpoints } from "./schemas.js";
+
 export type SlackClientOpt = {
   token: string;
   /** Slack API base URL (e.g. https://slack.com/api). */
@@ -12,7 +14,7 @@ type SlackApiParams = Record<string, string | number | boolean | undefined>;
 
 type SlackApiArgs =
   | [
-      path: string,
+      path: SlackEndpoints,
       payload: {
         method: "GET";
         query: SlackApiParams;
@@ -20,7 +22,7 @@ type SlackApiArgs =
       },
     ]
   | [
-      path: string,
+      path: SlackEndpoints,
       payload: {
         method: "POST";
         body?: Record<string, unknown>;

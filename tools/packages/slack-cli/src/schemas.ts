@@ -90,13 +90,6 @@ export const botTokenSchema = z
   .min(1)
   .regex(/^xoxb-/, "xoxb- で始まるトークンを指定してください");
 
-export const kindSchema = z.enum([
-  "chat.postMessage",
-  "conversations.history",
-  "conversations.list",
-  "search.messages",
-]);
-
 export type ChatPostMessageParams = z.infer<typeof chatPostMessageParamsSchema>;
 export type SearchMessagesParams = z.infer<typeof searchMessagesParamsSchema>;
 export type ConversationsHistoryParams = z.infer<
@@ -105,26 +98,29 @@ export type ConversationsHistoryParams = z.infer<
 export type ConversationsListParams = z.infer<
   typeof conversationsListParamsSchema
 >;
-export type Kind = z.infer<typeof kindSchema>;
 
+const KIND = [
+  "chat.postMessage",
+  "conversations.history",
+  "conversations.list",
+  "search.messages",
+  "auth.test",
+] as const;
+export const kindSchema = z.enum(KIND);
 /** CLI 用: kind で判別する union。parseArgs で safeParseArgs に渡す raw に kind を含める。 */
 export const cliArgsSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal(KIND[0]) }).merge(chatPostMessageParamsSchema),
   z
-    .object({ kind: z.literal("chat.postMessage") })
-    .merge(chatPostMessageParamsSchema),
-  z
-    .object({ kind: z.literal("conversations.history") })
+    .object({ kind: z.literal(KIND[1]) })
     .merge(conversationsHistoryParamsSchema),
-  z
-    .object({ kind: z.literal("conversations.list") })
-    .merge(conversationsListParamsSchema),
-  z
-    .object({ kind: z.literal("search.messages") })
-    .merge(searchMessagesParamsSchema),
+  z.object({ kind: z.literal(KIND[2]) }).merge(conversationsListParamsSchema),
+  z.object({ kind: z.literal(KIND[3]) }).merge(searchMessagesParamsSchema),
 ]);
 
-export type CliArgs = z.infer<typeof cliArgsSchema>;
+type Kind = (typeof KIND)[number];
+export type SlackEndpoints = `/${Kind}`;
 
+export type CliArgs = z.infer<typeof cliArgsSchema>;
 export const safeParse =
   <
     T extends Kind | "commandline" | "kind",
