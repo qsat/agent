@@ -1,40 +1,49 @@
 #!/usr/bin/env node
 import minimist from "minimist";
-import { getBaseUrl, getAuthHeader, projectsList, issueGet, searchJql, issueCreate } from "./api.js";
+import { getBaseUrl, getAuthHeader, projectsList, issueGet, searchJql } from "./api.js";
+import { helpText } from "./help-text.js";
+import type { CliArgs } from "./schemas.js";
+import { safeParseArgs } from "./schemas.js";
 
 function out(obj: unknown) {
   console.log(JSON.stringify(obj));
 }
 
-function err(msg: string): never {
-  console.error(msg);
+function showHelp(): void {
+  out(helpText);
+}
+
+function err(msg: string | Error): never {
+  if (msg instanceof Error) {
+    console.error(msg.message);
+    if (msg.stack) {
+      console.error(msg.stack);
+    }
+  } else {
+    console.error(msg);
+  }
   process.exit(1);
 }
 
-function requireConfirm(args: Record<string, unknown>, planned: object): void {
-  if (args.confirm) {
-    return;
-  }
-  out({ _dryRun: true, _message: "Add --confirm to execute. Planned action:", ...planned });
-  process.exit(0);
+function toKind(sub: string, cmd: string | undefined): CliArgs["kind"] | null {
+  if (sub === "projects" && cmd === "list") return "projects.list";
+  if (sub === "issue" && cmd === "get") return "issue.get";
+  if (sub === "search") return "search";
+  return null;
 }
 
-async function main() {
-  const argv = minimist(process.argv.slice(2), { boolean: ["confirm"] });
+export type JiraClientOpt = { baseUrl: string; auth: string };
+
+type Parsed = ({ kind: "help" } & JiraClientOpt) | (CliArgs & JiraClientOpt);
+
+function parseArgs(): Parsed {
+  const argv = minimist(process.argv.slice(2));
   const [sub, cmd, ...rest] = argv._ as string[];
 
   if (!sub || sub === "help" || argv.help || argv.h) {
-    out({
-      usage: "jira-cli <command> [options]",
-      commands: [
-        "projects list                   - list projects",
-        "issue get <key>                 - get issue by key (e.g. PROJ-123)",
-        "search --jql \"<jql>\"             - JQL search",
-        "issue create --project X --summary Y [--confirm] - create issue (use --confirm to execute)",
-      ],
-      env: "JIRA_BASE_URL, JIRA_USER, JIRA_TOKEN",
-    });
-    return;
+    const baseUrl = getBaseUrl();
+    const auth = getAuthHeader();
+    return { kind: "help", baseUrl: baseUrl ?? "", auth: auth ?? "" };
   }
 
   const baseUrl = getBaseUrl();
@@ -43,47 +52,52 @@ async function main() {
     err("JIRA_BASE_URL, JIRA_USER, and JIRA_TOKEN must be set");
   }
 
-  if (sub === "projects" && cmd === "list") {
-    const data = await projectsList(baseUrl, auth);
-    out(data);
-    return;
+  const common: JiraClientOpt = { baseUrl, auth };
+
+  const kind = toKind(sub, cmd);
+  if (!kind) {
+    err(`Unknown command: ${sub} ${cmd ?? ""}. Use 'help' for usage.`);
   }
 
-  if (sub === "issue" && cmd === "get") {
-    const key = argv.key ?? rest[0];
-    if (!key) {
-      err("Usage: issue get <issue-key>");
-    }
-    const data = await issueGet(baseUrl, auth, key);
-    out(data);
-    return;
-  }
+  const raw: Record<string, unknown> = {
+    kind,
+    key: argv.key ?? rest[0],
+    jql: (argv.jql ?? rest.join(" ").trim()) || undefined,
+  };
 
-  if (sub === "search") {
-    const jql = argv.jql ?? rest.join(" ");
-    if (!jql) {
-      err("Usage: search --jql \"<jql>\"");
-    }
-    const data = await searchJql(baseUrl, auth, jql);
-    out(data);
-    return;
-  }
-
-  if (sub === "issue" && cmd === "create") {
-    const project = argv.project ?? rest[0];
-    const summary = argv.summary ?? rest[1];
-    if (!project || !summary) {
-      err("Usage: issue create --project <key> --summary <text> [--confirm]");
-    }
-    const planned = { action: "issue.create", project, summary };
-    requireConfirm(argv, planned);
-    const data = await issueCreate(baseUrl, auth, project, summary);
-    out(data);
-  }
-
-  err(`Unknown command: ${sub} ${cmd ?? ""}. Use 'help' for usage.`);
+  const data = safeParseArgs(raw);
+  return { ...data, ...common };
 }
 
-main().catch((e) => {
-  err(String(e));
-});
+async function run(parsed: Parsed): Promise<void> {
+  const { baseUrl, auth } = parsed;
+
+  switch (parsed.kind) {
+    case "help":
+      return showHelp();
+
+    case "projects.list": {
+      const data = await projectsList(baseUrl, auth);
+      return out(data);
+    }
+
+    case "issue.get": {
+      const data = await issueGet(baseUrl, auth, parsed.key);
+      return out(data);
+    }
+
+    case "search": {
+      const data = await searchJql(baseUrl, auth, parsed.jql);
+      return out(data);
+    }
+
+    default: {
+      return err("Unknown command. Use 'help' for usage.");
+    }
+  }
+}
+
+(async (): Promise<void> => {
+  const args = parseArgs();
+  await run(args);
+})().catch((e) => err(e));

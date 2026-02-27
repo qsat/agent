@@ -12,6 +12,29 @@ export function getAuthHeader(): string | undefined {
   return `Basic ${encoded}`;
 }
 
+function buildErrorMessage(status: number, text: string, prefix: string): string {
+  let msg = text;
+  try {
+    const body = JSON.parse(text) as {
+      errorMessages?: string[];
+      errors?: Record<string, string>;
+    };
+    const parts: string[] = [];
+    if (body.errorMessages?.length) parts.push(...body.errorMessages);
+    if (
+      body.errors &&
+      typeof body.errors === "object"
+    )
+      parts.push(
+        ...Object.entries(body.errors).map(([k, v]) => `${k}: ${v}`)
+      );
+    if (parts.length) msg = parts.join("; ");
+  } catch {
+    /* use text as is */
+  }
+  return `${prefix} ${status}: ${msg}`;
+}
+
 async function confluenceFetch(
   baseUrl: string,
   auth: string,
@@ -28,7 +51,8 @@ async function confluenceFetch(
     },
   });
   if (!res.ok) {
-    throw new Error(`Confluence API ${res.status}: ${await res.text()}`);
+    const text = await res.text();
+    throw new Error(buildErrorMessage(res.status, text, "Confluence API"));
   }
   return res.json();
 }
@@ -37,7 +61,10 @@ export async function spacesList(baseUrl: string, auth: string): Promise<unknown
   const res = await fetch(`${baseUrl}/rest/api/space`, {
     headers: { Authorization: auth, Accept: "application/json" },
   });
-  if (!res.ok) throw new Error(`Spaces API ${res.status}: ${await res.text()}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(buildErrorMessage(res.status, text, "Spaces API"));
+  }
   return res.json();
 }
 
@@ -58,27 +85,9 @@ export async function searchCql(
   const res = await fetch(`${baseUrl}/rest/api/content${path}`, {
     headers: { Authorization: auth, Accept: "application/json" },
   });
-  if (!res.ok) throw new Error(`Search API ${res.status}: ${await res.text()}`);
-  return res.json();
-}
-
-export async function pageCreate(
-  baseUrl: string,
-  auth: string,
-  spaceKey: string,
-  title: string,
-  bodyHtml: string
-): Promise<unknown> {
-  const res = await fetch(`${baseUrl}/rest/api/content`, {
-    method: "POST",
-    headers: { Authorization: auth, "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({
-      type: "page",
-      title,
-      space: { key: spaceKey },
-      body: { storage: { value: bodyHtml, representation: "storage" } },
-    }),
-  });
-  if (!res.ok) throw new Error(`Page create ${res.status}: ${await res.text()}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(buildErrorMessage(res.status, text, "Search API"));
+  }
   return res.json();
 }

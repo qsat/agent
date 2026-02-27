@@ -12,6 +12,29 @@ export function getAuthHeader(): string | undefined {
   return `Basic ${encoded}`;
 }
 
+function buildErrorMessage(status: number, text: string, prefix: string): string {
+  let msg = text;
+  try {
+    const body = JSON.parse(text) as {
+      errorMessages?: string[];
+      errors?: Record<string, string>;
+    };
+    const parts: string[] = [];
+    if (body.errorMessages?.length) parts.push(...body.errorMessages);
+    if (
+      body.errors &&
+      typeof body.errors === "object"
+    )
+      parts.push(
+        ...Object.entries(body.errors).map(([k, v]) => `${k}: ${v}`)
+      );
+    if (parts.length) msg = parts.join("; ");
+  } catch {
+    /* use text as is */
+  }
+  return `${prefix} ${status}: ${msg}`;
+}
+
 async function jiraFetch(
   baseUrl: string,
   auth: string,
@@ -29,7 +52,8 @@ async function jiraFetch(
     },
   });
   if (!res.ok) {
-    throw new Error(`Jira API ${res.status}: ${await res.text()}`);
+    const text = await res.text();
+    throw new Error(buildErrorMessage(res.status, text, "Jira API"));
   }
   return res.json();
 }
@@ -56,22 +80,4 @@ export async function searchJql(
     auth,
     `/search?jql=${encodeURIComponent(jql)}&maxResults=50`
   );
-}
-
-export async function issueCreate(
-  baseUrl: string,
-  auth: string,
-  projectKey: string,
-  summary: string
-): Promise<unknown> {
-  return jiraFetch(baseUrl, auth, "/issue", {
-    method: "POST",
-    body: JSON.stringify({
-      fields: {
-        project: { key: projectKey },
-        summary,
-        issuetype: { name: "Task" },
-      },
-    }),
-  });
 }

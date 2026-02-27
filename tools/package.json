@@ -2,9 +2,7 @@
   "name": "tools",
   "private": true,
   "type": "module",
-  "workspaces": [
-    "packages/*"
-  ],
+  "workspaces": ["packages/*"],
   "scripts": {
     "build": "npm run build -w slack-cli && npm run build -w confluence-cli && npm run build -w jira-cli",
     "typecheck": "tsc --noEmit",

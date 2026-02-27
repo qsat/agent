@@ -11,13 +11,13 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
+  "dependencies": {
+    "minimist": "^1.2.8",
+    "zod": "^4.3.6"
+  },
   "devDependencies": {
     "tsup": "^8.3.5",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
-  },
-  "dependencies": {
-    "minimist": "^1.2.8",
-    "zod": "^4.3.6"
   }
 }
