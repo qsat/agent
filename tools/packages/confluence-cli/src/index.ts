@@ -1,75 +1,71 @@
 #!/usr/bin/env node
 import minimist from "minimist";
-import { getBaseUrl, getAuthHeader, spacesList, pageGet, searchCql } from "./api.js";
+import { spacesList, pageGet, searchCql, ConfluenceClientOpt } from "./api.js";
 import { helpText } from "./help-text.js";
 import type { CliArgs } from "./schemas.js";
 import { safeParseArgs, safeParseKind } from "./schemas.js";
 
-function out(obj: unknown) {
-  console.log(JSON.stringify(obj));
-}
+const out = (o: unknown) => console.log(JSON.stringify(o));
 
-function showHelp(): void {
-  out(helpText);
-}
+const showHelp = () => out(helpText);
 
-function err(msg: string | Error): never {
-  if (msg instanceof Error) {
-    console.error(msg.message);
-    if (msg.stack) console.error(msg.stack);
-  } else {
-    console.error(msg);
-  }
+function err(e: string | Error): never {
+  if (e instanceof Error) console.error(e.stack || e.message);
+  else console.error(e);
   process.exit(1);
 }
 
-export type ConfluenceClientOpt = { baseUrl: string; auth: string };
+function getOpt(): ConfluenceClientOpt {
+  const base = process.env.CONFLUENCE_BASE_URL;
+  if (!base) err("CONFLUENCE_BASE_URL must be set");
+  const user = process.env.CONFLUENCE_USER;
+  if (!user) err("CONFLUENCE_USER must be set");
+  const token = process.env.CONFLUENCE_TOKEN;
+  if (!token) err("CONFLUENCE_TOKEN must be set");
+  return {
+    baseUrl: base.replace(/\/$/, ""),
+    auth: { user, token },
+  };
+}
 
-type Parsed =
-  | ({ kind: "help" } & ConfluenceClientOpt)
-  | (CliArgs & ConfluenceClientOpt);
+type Parsed = { kind: "help" } | (CliArgs & ConfluenceClientOpt);
 
 function parseArgs(): Parsed {
   const argv = minimist(process.argv.slice(2));
   const [sub, cmd] = argv._ as string[];
-  const baseUrl = getBaseUrl();
-  const auth = getAuthHeader();
 
   if (!sub || sub === "help" || argv.help || argv.h) {
-    return { kind: "help", baseUrl: baseUrl ?? "", auth: auth ?? "" };
+    return { kind: "help" };
   }
 
-  if (!baseUrl || !auth) {
-    err(
-      "CONFLUENCE_BASE_URL, CONFLUENCE_USER, and CONFLUENCE_TOKEN must be set",
-    );
-  }
-
-  const common: ConfluenceClientOpt = { baseUrl, auth };
-  const kind = safeParseKind([sub, cmd].join("."));
-  return { ...safeParseArgs({ ...argv, kind }), ...common };
+  const common: ConfluenceClientOpt = getOpt();
+  const kindStr = cmd ? `${sub}.${cmd}` : sub;
+  const kind = safeParseKind(kindStr);
+  const [, , ...rest] = argv._ as string[];
+  const raw: Record<string, unknown> = {
+    ...argv,
+    kind,
+    id: argv.id ?? rest[0],
+    cql: argv.cql ?? (rest.length ? rest.join(" ") : undefined),
+  };
+  return { ...safeParseArgs(raw), ...common };
 }
 
 async function run(parsed: Parsed): Promise<void> {
-  const { baseUrl, auth } = parsed;
-
   switch (parsed.kind) {
     case "help":
       return showHelp();
 
     case "spaces.list": {
-      const data = await spacesList(baseUrl, auth);
-      return out(data);
+      return out(await spacesList(parsed));
     }
 
     case "page.get": {
-      const data = await pageGet(baseUrl, auth, parsed.id);
-      return out(data);
+      return out(await pageGet(parsed.id, parsed));
     }
 
     case "search": {
-      const data = await searchCql(baseUrl, auth, parsed.cql);
-      return out(data);
+      return out(await searchCql(parsed.cql, parsed));
     }
 
     default: {

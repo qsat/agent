@@ -12,6 +12,7 @@ export const issueGetParamsSchema = z.object({
 
 export const searchParamsSchema = z.object({
   jql: z.string().min(1),
+  maxResults: z.number().int().positive().default(10),
 });
 
 const KIND = ["projects.list", "issue.get", "search"] as const;

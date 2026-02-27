@@ -1,93 +1,77 @@
 #!/usr/bin/env node
 import minimist from "minimist";
-import { getBaseUrl, getAuthHeader, projectsList, issueGet, searchJql } from "./api.js";
+import { projectsList, issueGet, searchJql } from "./api.js";
 import { helpText } from "./help-text.js";
 import type { CliArgs } from "./schemas.js";
-import { safeParseArgs } from "./schemas.js";
+import { safeParseArgs, safeParseKind } from "./schemas.js";
 
 function out(obj: unknown) {
   console.log(JSON.stringify(obj));
 }
 
-function showHelp(): void {
+function showHelp() {
   out(helpText);
 }
 
 function err(msg: string | Error): never {
-  if (msg instanceof Error) {
-    console.error(msg.message);
-    if (msg.stack) {
-      console.error(msg.stack);
-    }
-  } else {
-    console.error(msg);
-  }
+  if (msg instanceof Error) console.error(msg.stack || msg.message);
+  else console.error(msg);
   process.exit(1);
 }
 
-function toKind(sub: string, cmd: string | undefined): CliArgs["kind"] | null {
-  if (sub === "projects" && cmd === "list") return "projects.list";
-  if (sub === "issue" && cmd === "get") return "issue.get";
-  if (sub === "search") return "search";
-  return null;
+function getOpt(): JiraClientOpt {
+  const base = process.env.JIRA_BASE_URL;
+  if (!base) err("JIRA_BASE_URL must be set");
+  const user = process.env.JIRA_USER;
+  if (!user) err("JIRA_USER must be set");
+  const token = process.env.JIRA_TOKEN;
+  if (!token) err("JIRA_TOKEN must be set");
+  return { baseUrl: base.replace(/\/$/, ""), user, token };
 }
 
-export type JiraClientOpt = { baseUrl: string; auth: string };
+export type JiraClientOpt = { baseUrl: string; user: string; token: string };
 
-type Parsed = ({ kind: "help" } & JiraClientOpt) | (CliArgs & JiraClientOpt);
+type Parsed = { kind: "help" } | (CliArgs & JiraClientOpt);
 
 function parseArgs(): Parsed {
   const argv = minimist(process.argv.slice(2));
   const [sub, cmd, ...rest] = argv._ as string[];
 
   if (!sub || sub === "help" || argv.help || argv.h) {
-    const baseUrl = getBaseUrl();
-    const auth = getAuthHeader();
-    return { kind: "help", baseUrl: baseUrl ?? "", auth: auth ?? "" };
+    return { kind: "help" };
   }
 
-  const baseUrl = getBaseUrl();
-  const auth = getAuthHeader();
-  if (!baseUrl || !auth) {
-    err("JIRA_BASE_URL, JIRA_USER, and JIRA_TOKEN must be set");
-  }
-
-  const common: JiraClientOpt = { baseUrl, auth };
-
-  const kind = toKind(sub, cmd);
-  if (!kind) {
-    err(`Unknown command: ${sub} ${cmd ?? ""}. Use 'help' for usage.`);
-  }
-
+  const common: JiraClientOpt = getOpt();
+  const kindStr = cmd ? `${sub}.${cmd}` : sub;
+  const kind = safeParseKind(kindStr);
   const raw: Record<string, unknown> = {
+    ...argv,
     kind,
     key: argv.key ?? rest[0],
     jql: (argv.jql ?? rest.join(" ").trim()) || undefined,
   };
-
-  const data = safeParseArgs(raw);
-  return { ...data, ...common };
+  return { ...safeParseArgs(raw), ...common };
 }
 
 async function run(parsed: Parsed): Promise<void> {
-  const { baseUrl, auth } = parsed;
-
   switch (parsed.kind) {
     case "help":
       return showHelp();
 
     case "projects.list": {
-      const data = await projectsList(baseUrl, auth);
+      const data = await projectsList(parsed);
       return out(data);
     }
 
     case "issue.get": {
-      const data = await issueGet(baseUrl, auth, parsed.key);
+      const { key, ...opt } = parsed;
+      const data = await issueGet(opt, key);
       return out(data);
     }
 
     case "search": {
-      const data = await searchJql(baseUrl, auth, parsed.jql);
+      const { jql, ...opt } = parsed;
+      const data = await searchJql(opt, jql);
       return out(data);
     }
 

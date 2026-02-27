@@ -1,18 +1,19 @@
-export function getBaseUrl(): string | undefined {
-  const base = process.env.JIRA_BASE_URL;
-  if (!base) return undefined;
-  return base.replace(/\/$/, "");
-}
+import { issueGetParamsSchema, searchParamsSchema } from "./schemas.js";
 
-export function getAuthHeader(): string | undefined {
-  const user = process.env.JIRA_USER;
-  const token = process.env.JIRA_TOKEN;
-  if (!user || !token) return undefined;
-  const encoded = Buffer.from(`${user}:${token}`).toString("base64");
+export type JiraAuth = { user: string; token: string };
+
+export type JiraClientOpt = JiraAuth & { baseUrl: string };
+
+function authHeader(auth: JiraAuth): string {
+  const encoded = Buffer.from(`${auth.user}:${auth.token}`).toString("base64");
   return `Basic ${encoded}`;
 }
 
-function buildErrorMessage(status: number, text: string, prefix: string): string {
+function buildErrorMessage(
+  status: number,
+  text: string,
+  prefix: string,
+): string {
   let msg = text;
   try {
     const body = JSON.parse(text) as {
@@ -21,13 +22,8 @@ function buildErrorMessage(status: number, text: string, prefix: string): string
     };
     const parts: string[] = [];
     if (body.errorMessages?.length) parts.push(...body.errorMessages);
-    if (
-      body.errors &&
-      typeof body.errors === "object"
-    )
-      parts.push(
-        ...Object.entries(body.errors).map(([k, v]) => `${k}: ${v}`)
-      );
+    if (body.errors && typeof body.errors === "object")
+      parts.push(...Object.entries(body.errors).map(([k, v]) => `${k}: ${v}`));
     if (parts.length) msg = parts.join("; ");
   } catch {
     /* use text as is */
@@ -35,20 +31,31 @@ function buildErrorMessage(status: number, text: string, prefix: string): string
   return `${prefix} ${status}: ${msg}`;
 }
 
+type QueryParams = Record<string, string | number | boolean | undefined>;
+
+function toQueryString(params: QueryParams): string {
+  const filtered = Object.fromEntries(
+    Object.entries(params).filter(
+      ([, v]) => v !== undefined && v !== "",
+    ) as [string, string | number | boolean][],
+  );
+  const q = new URLSearchParams(
+    Object.entries(filtered).map(([k, v]) => [k, String(v)]),
+  ).toString();
+  return q ? `?${q}` : "";
+}
+
 async function jiraFetch(
-  baseUrl: string,
-  auth: string,
   path: string,
-  init: RequestInit = {}
+  o: JiraClientOpt,
+  query?: QueryParams,
 ): Promise<unknown> {
-  const url = `${baseUrl}/rest/api/3${path}`;
+  const url = `${o.baseUrl}/rest/api/3${path}${toQueryString(query ?? {})}`;
   const res = await fetch(url, {
-    ...init,
     headers: {
-      Authorization: auth,
+      Authorization: authHeader(o),
       "Content-Type": "application/json",
       Accept: "application/json",
-      ...(init.headers as Record<string, string>),
     },
   });
   if (!res.ok) {
@@ -58,26 +65,25 @@ async function jiraFetch(
   return res.json();
 }
 
-export async function projectsList(baseUrl: string, auth: string): Promise<unknown> {
-  return jiraFetch(baseUrl, auth, "/project");
+export async function projectsList(o: JiraClientOpt): Promise<unknown> {
+  return jiraFetch("/project", o, {});
 }
 
 export async function issueGet(
-  baseUrl: string,
-  auth: string,
-  issueKey: string
+  o: JiraClientOpt,
+  query: { key: string },
 ): Promise<unknown> {
-  return jiraFetch(baseUrl, auth, `/issue/${encodeURIComponent(issueKey)}`);
+  const parsed = issueGetParamsSchema.parse(query);
+  return jiraFetch(`/issue/${encodeURIComponent(parsed.key)}`, o);
 }
 
 export async function searchJql(
-  baseUrl: string,
-  auth: string,
-  jql: string
+  o: JiraClientOpt,
+  query: { jql: string; maxResults?: number },
 ): Promise<unknown> {
-  return jiraFetch(
-    baseUrl,
-    auth,
-    `/search?jql=${encodeURIComponent(jql)}&maxResults=50`
-  );
+  const parsed = searchParamsSchema.parse(query);
+  return jiraFetch("/search", o, {
+    jql: parsed.jql,
+    maxResults: parsed.maxResults ?? 50,
+  });
 }
