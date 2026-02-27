@@ -1,27 +1,21 @@
 import minimist from "minimist";
 import { slackUserClient, slackBotClient } from "./api.js";
+import type { SearchMessagesParams } from "./schemas.js";
+import { safeParseSearchMessagesParams } from "./schemas.js";
 
 /** メンション検索など User Token 向けコマンド用。SLACK_USER_TOKEN を優先。 */
 function getTokenForUserScoped(): string | undefined {
-  return (
-    process.env.SLACK_USER_TOKEN ??
-    process.env.SLACK_TOKEN ??
-    process.env.SLACK_BOT_TOKEN
-  );
+  return process.env.SLACK_USER_TOKEN ?? "";
 }
 
 /** チャンネル一覧・投稿など Bot Token で十分なコマンド用。SLACK_BOT_TOKEN を優先。 */
 function getTokenForBotScoped(): string | undefined {
-  return (
-    process.env.SLACK_BOT_TOKEN ??
-    process.env.SLACK_USER_TOKEN ??
-    process.env.SLACK_TOKEN
-  );
+  return process.env.SLACK_BOT_TOKEN ?? "";
 }
 
-/** コマンドに応じて使うトークンを返す。mentions は User Token、mentions-bot 含むそれ以外は Bot Token 優先。 */
+/** コマンドに応じて使うトークンを返す。search は User Token、それ以外は Bot Token 優先。 */
 function getToken(sub: string | undefined): string | undefined {
-  if (sub === "mentions") return getTokenForUserScoped();
+  if (sub === "search") return getTokenForUserScoped();
   return getTokenForBotScoped();
 }
 
@@ -57,21 +51,18 @@ type Parsed = (
       kind: "conversations";
       action: "list";
     }
-  | { kind: "mentions"; oldest: string; latest: string }
-  | { kind: "mentions-bot"; oldest: string; latest: string }
   | {
       kind: "post";
       channel: string;
       text: string;
       confirm: boolean;
     }
+  | ({ kind: "search" } & SearchMessagesParams)
   | { kind: "unknown"; sub: string; cmd: string }
 ) & {
   token: string;
   baseUrl: string;
-  /** mentions-bot 用。Unix ts（必須） */
   oldest?: string;
-  /** mentions-bot 用。Unix ts（必須） */
   latest?: string;
 };
 
@@ -88,7 +79,7 @@ function parseArgs(): Parsed {
   const baseUrl = getSlackApiBaseUrl();
   if (!token) {
     err(
-      "Set SLACK_BOT_TOKEN and/or SLACK_USER_TOKEN (or SLACK_TOKEN). mentions requires User Token.",
+      "Set SLACK_BOT_TOKEN and/or SLACK_USER_TOKEN (or SLACK_TOKEN). search requires User Token.",
     );
   }
 
@@ -106,20 +97,6 @@ function parseArgs(): Parsed {
     return { kind: "conversations", action: "list", ...common };
   }
 
-  if (sub === "mentions") {
-    if (oldest === undefined || latest === undefined) {
-      err("mentions requires --oldest <ts> and --latest <ts> (Unix timestamp).");
-    }
-    return { kind: "mentions", ...common, oldest, latest };
-  }
-
-  if (sub === "mentions-bot") {
-    if (oldest === undefined || latest === undefined) {
-      err("mentions-bot requires --oldest <ts> and --latest <ts> (Unix timestamp).");
-    }
-    return { kind: "mentions-bot", ...common, oldest, latest };
-  }
-
   if (sub === "post") {
     const channel = argv.channel ?? rest[0];
     const text = argv.text ?? rest[1] ?? rest.slice(2).join(" ");
@@ -127,6 +104,16 @@ function parseArgs(): Parsed {
       err("Usage: post --channel <id> --text <message> [--confirm]");
     }
     return { kind: "post", ...common, channel, text, confirm };
+  }
+
+  if (sub === "search") {
+    const d = { ...argv, query: argv.query ?? rest[0] };
+    try {
+      const data = safeParseSearchMessagesParams(d);
+      return { kind: "search", ...data, ...common };
+    } catch (e) {
+      err(e instanceof Error ? e : new Error(String(e)));
+    }
   }
 
   return { kind: "unknown", sub, cmd, ...common };
@@ -138,26 +125,31 @@ function showHelp(): void {
     commands: [
       "channels list                    - list channels",
       "conversations list                - list conversations (channels + DMs)",
-      "mentions --oldest <ts> --latest <ts>      - list messages that mention you (User Token)",
-      "mentions-bot --oldest <ts> --latest <ts>   - list messages that mention the bot (Bot Token)",
+      "search --query <string> [--count N] [--highlight] [--page N] [--cursor C] [--sort score|timestamp] [--sort_dir asc|desc] [--team_id T] - search messages (User Token)",
       "post --channel <id> --text <msg> [--confirm] - post message (use --confirm to execute)",
     ],
-    env: "SLACK_BOT_TOKEN, SLACK_USER_TOKEN, or SLACK_TOKEN (mentions は User Token 推奨). SLACK_API_BASE_URL (optional)",
+    "search options (see https://docs.slack.dev/reference/methods/search.messages/)":
+      [
+        "--query (required), --count (max 100), --highlight, --page, --cursor, --sort (score|timestamp), --sort_dir (asc|desc), --team_id",
+      ],
+    "search query syntax": [
+      "mentions:USER_ID, from:<@USER_ID>, in:#channel, keyword. 例: search --query 'mentions:W01234' --count 50 --sort timestamp",
+    ],
+    env: "SLACK_BOT_TOKEN, SLACK_USER_TOKEN, or SLACK_TOKEN. search は User Token. SLACK_API_BASE_URL (optional)",
   });
 }
 
 /**
  * パース済みの情報だけを引数で受け、メイン処理を行う。argv は参照しない。
- * mentions は User Token 用の client、それ以外は Bot Token 用の client を使う。
+ * search は User Token 用の client、それ以外は Bot Token 用の client を使う。
  */
 async function run(parsed: Parsed): Promise<void> {
-  const opt = { token: parsed.token, baseUrl: parsed.baseUrl };
-  const isUserScoped = parsed.kind === "mentions";
-  const client = isUserScoped
-    ? slackUserClient(opt)
-    : slackBotClient(opt);
+  const { token, kind, baseUrl } = parsed;
+  const opt = { token, baseUrl };
+  const isUserScoped = parsed.kind === "search";
+  const client = isUserScoped ? slackUserClient(opt) : slackBotClient(opt);
 
-  switch (parsed.kind) {
+  switch (kind) {
     case "help":
       return showHelp();
 
@@ -169,22 +161,6 @@ async function run(parsed: Parsed): Promise<void> {
     case "conversations": {
       const res = await client.listConversations();
       return out(res.channels ?? []);
-    }
-
-    case "mentions": {
-      const res = await slackUserClient(opt).getMentionsToMe({
-        oldest: parsed.oldest,
-        latest: parsed.latest,
-      });
-      return out(res);
-    }
-
-    case "mentions-bot": {
-      const res = await slackBotClient(opt).getMentionsToBot({
-        oldest: parsed.oldest,
-        latest: parsed.latest,
-      });
-      return out(res);
     }
 
     case "post": {
@@ -201,6 +177,12 @@ async function run(parsed: Parsed): Promise<void> {
       return out(res);
     }
 
+    case "search": {
+      const { token, baseUrl, ...rest } = parsed;
+      const res = await slackUserClient({ token, baseUrl }).search(rest);
+      return out(res);
+    }
+
     default: {
       return err(
         `Unknown command: ${parsed.sub} ${parsed.cmd}. Use 'help' for usage.`,
@@ -209,6 +191,7 @@ async function run(parsed: Parsed): Promise<void> {
   }
 }
 
-(async (): Promise<void> => await run(parseArgs()))().catch((e: unknown) => {
-  err(e instanceof Error ? e : new Error(String(e)));
-});
+(async (): Promise<void> => {
+  const args = parseArgs();
+  await run(args);
+})().catch((e) => err(e));

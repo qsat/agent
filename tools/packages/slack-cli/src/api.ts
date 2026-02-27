@@ -1,3 +1,16 @@
+import type {
+  SearchMessagesParams,
+  ConversationsHistoryParams,
+  ConversationsListParams,
+  ChatPostMessageParams,
+} from "./schemas.js";
+import {
+  safeParseSearchMessagesParams,
+  safeParseConversationsHistoryParams,
+  safeParseConversationsListParams,
+  safeParseChatPostMessageParams,
+} from "./schemas.js";
+
 const SLACK_USER_TOKEN_PREFIX = "xoxp-";
 const SLACK_BOT_TOKEN_PREFIX = "xoxb-";
 
@@ -109,81 +122,60 @@ export type AuthTestParams = Record<string, never>;
 function authTest(
   baseUrl: string,
   token: string,
-): Promise<{ user_id?: string }> {
+): Promise<{ user_id?: string; team_id?: string }> {
   return slackFetch("/auth.test", {
     method: "POST" as const,
     opt: { baseUrl, token },
-  });
+  }) as Promise<{ user_id?: string; team_id?: string }>;
 }
 
-export type SearchMessagesParams = {
-  query: string;
-  count?: number;
-  sort?: string;
-};
+export type {
+  SearchMessagesParams,
+  ConversationsHistoryParams,
+  ConversationsListParams,
+  ChatPostMessageParams,
+} from "./schemas.js";
 
-/** @see https://api.slack.com/methods/search.messages */
+/** @see https://docs.slack.dev/reference/methods/search.messages/ */
 function searchMessages(
   baseUrl: string,
   token: string,
   params: SearchMessagesParams,
 ): Promise<Record<string, unknown>> {
   return slackFetch("/search.messages", {
-    query: {
-      query: params.query.trim(),
-      count: params.count,
-      sort: params.sort,
-    },
+    query: params,
     method: "GET" as const,
     opt: { baseUrl, token },
   });
 }
-
-export type ConversationsHistoryParams = {
-  channel: string;
-  /** この Unix ts より後のメッセージのみ（必須） */
-  oldest: string;
-  /** この Unix ts より前のメッセージのみ（必須） */
-  latest: string;
-  limit?: number;
-  cursor?: string;
-};
 
 /** @see https://api.slack.com/methods/conversations.history */
 function conversationsHistory(
   baseUrl: string,
   token: string,
-  params: ConversationsHistoryParams,
+  params: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
+  const parsed = safeParseConversationsHistoryParams(params);
   return slackFetch("/conversations.history", {
-    query: {
-      channel: params.channel,
-      limit: params.limit,
-      cursor: params.cursor,
-      oldest: params.oldest,
-      latest: params.latest,
-    },
+    query: parsed,
     method: "GET" as const,
     opt: { baseUrl, token },
   });
 }
 
-export type ConversationsListParams = {
-  limit?: number;
-  types?: string;
-};
-
 /** @see https://api.slack.com/methods/conversations.list */
 function channelsList(
   baseUrl: string,
   token: string,
-  params: ConversationsListParams = {},
+  params: Record<string, unknown> = {},
 ): Promise<Record<string, unknown>> {
+  const parsed = safeParseConversationsListParams({
+    limit: 10,
+    types: "public_channel,private_channel",
+    ...params,
+  });
   return slackFetch("/conversations.list", {
-    query: {
-      limit: params.limit ?? 10,
-      types: params.types ?? "public_channel,private_channel",
-    },
+    query: parsed,
     method: "GET" as const,
     opt: { baseUrl, token },
   });
@@ -193,28 +185,25 @@ function channelsList(
 function conversationsList(
   baseUrl: string,
   token: string,
-  params: ConversationsListParams = {},
+  params: Record<string, unknown> = {},
 ): Promise<Record<string, unknown>> {
+  const parsed = safeParseConversationsListParams({ limit: 10, ...params });
   return slackFetch("/conversations.list", {
-    query: { limit: params.limit ?? 10 },
+    query: parsed,
     method: "GET" as const,
     opt: { baseUrl, token },
   });
 }
 
-export type ChatPostMessageParams = {
-  channel: string;
-  text: string;
-};
-
 /** @see https://api.slack.com/methods/chat.postMessage */
 function chatPostMessage(
   baseUrl: string,
   token: string,
-  params: ChatPostMessageParams,
+  params: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
+  const parsed = safeParseChatPostMessageParams(params);
   return slackFetch("/chat.postMessage", {
-    body: { channel: params.channel, text: params.text },
+    body: parsed,
     method: "POST" as const,
     opt: { baseUrl, token },
   });
@@ -231,44 +220,22 @@ function createBaseClient(baseUrl: string, token: string) {
   };
 }
 
-/** User Token 用クライアント。getMentionsToMe（search:read）を含む。token には xoxp-... を渡す。 */
+/** User Token 用クライアント。search（search:read）を含む。token には xoxp-... を渡す。 */
 export function slackUserClient(opt: SlackClientOpt) {
   assertToken(SLACK_USER_TOKEN_PREFIX, opt.token);
   const { token, baseUrl } = opt;
   const base = createBaseClient(baseUrl, token);
   return {
     ...base,
-    /** 自分へのメンションを含むメッセージを検索。User token の search:read が必要。
-     * oldest/latest の範囲外は結果から除外する（search.messages は範囲指定非対応のためクライアント側でフィルタ）。
-     * @see https://api.slack.com/methods/auth.test
-     * @see https://api.slack.com/methods/search.messages */
-    getMentionsToMe: async (opts: {
-      oldest: string;
-      latest: string;
-      count?: number;
-    }) => {
+    /** 任意のクエリで search.messages を実行。search:read が必要。引数は Zod の safeParse で検証する。 */
+    search: async (opts: Record<string, unknown>) => {
+      const parsed = safeParseSearchMessagesParams(opts);
       const auth = await authTest(baseUrl, token);
-      const userId = auth.user_id;
-      if (!userId) throw new Error("auth.test did not return user_id");
-      const res = await searchMessages(baseUrl, token, {
-        query: `mentions:<@${userId}>`,
-        count: opts.count ?? 20,
-        sort: "timestamp",
+      return searchMessages(baseUrl, token, {
+        ...parsed,
+        team_id: parsed.team_id ?? auth.team_id,
+        cursor: parsed.cursor ?? "*",
       });
-      const messages = res.messages as Record<string, unknown> | undefined;
-      const rawMatches = (messages?.matches as
-        | Record<string, unknown>[]
-        | undefined) ?? [];
-      const query = (res.query as string) ?? `mentions:<@${userId}>`;
-      const oldestNum = Number(opts.oldest);
-      const latestNum = Number(opts.latest);
-      const matches = rawMatches.filter((m) => {
-        const ts = m.ts as string | undefined;
-        if (!ts) return false;
-        const t = Number(ts);
-        return !Number.isNaN(t) && t >= oldestNum && t <= latestNum;
-      });
-      return { matches, query };
     },
   };
 }
@@ -278,56 +245,5 @@ export function slackUserClient(opt: SlackClientOpt) {
 export function slackBotClient(opt: SlackClientOpt) {
   assertToken(SLACK_BOT_TOKEN_PREFIX, opt.token);
   const { token, baseUrl } = opt;
-  const base = createBaseClient(baseUrl, token);
-  return {
-    ...base,
-    /** Bot へのメンションを含むメッセージを収集。conversations.list + history でチャンネルを走査する。
-     * @see https://api.slack.com/methods/auth.test
-     * @see https://api.slack.com/methods/conversations.list
-     * @see https://api.slack.com/methods/conversations.history */
-    getMentionsToBot: async (opts: {
-      /** Unix ts（必須） */
-      oldest: string;
-      /** Unix ts（必須） */
-      latest: string;
-      channelLimit?: number;
-      historyLimit?: number;
-    }) => {
-      const auth = (await authTest(baseUrl, token)) as { user_id?: string };
-      const botUserId = auth.user_id;
-      if (!botUserId) throw new Error("auth.test did not return user_id");
-      const listRes = await conversationsList(baseUrl, token, {
-        limit: opts.channelLimit ?? 20,
-      });
-      const chs = (listRes.channels ?? []) as Array<{ id: string }>;
-      const historyLimit = opts.historyLimit ?? 50;
-      const mention = `<@${botUserId}>`;
-      const items: Array<{
-        channel: string;
-        message: Record<string, unknown>;
-      }> = [];
-      const { oldest, latest } = opts;
-      for (const c of chs) {
-        if (!c?.id) continue;
-        try {
-          const hist = (await conversationsHistory(baseUrl, token, {
-            channel: c.id,
-            oldest,
-            latest,
-            limit: historyLimit,
-          })) as { messages?: Array<Record<string, unknown>> };
-          const messages = hist.messages ?? [];
-          for (const msg of messages) {
-            const text = (msg.text as string) ?? "";
-            if (text.includes(mention)) {
-              items.push({ channel: c.id, message: msg });
-            }
-          }
-        } catch {
-          // not_in_channel などはスキップ
-        }
-      }
-      return { botUserId, items };
-    },
-  };
+  return createBaseClient(baseUrl, token);
 }
