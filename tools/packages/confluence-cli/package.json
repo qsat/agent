@@ -7,14 +7,17 @@
     "confluence-cli": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsup"
+    "build": "tsup",
+    "localrun": "npm run build && npx tsx src/__tests__/localrun.ts"
   },
   "dependencies": {
     "minimist": "^1.2.8",
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "dotenv": "^17.3.1",
     "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }
 }

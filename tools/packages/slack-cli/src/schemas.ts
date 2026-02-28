@@ -4,6 +4,18 @@ import { z, ZodEnum, type ZodObject, type ZodUnion } from "zod";
  * Slack API 引数の Zod スキーマ定義（一元管理）。
  */
 
+export {
+  searchMessagesResponseSchema,
+  type SearchMessagesResponse,
+  type SearchMessagesMatch,
+  conversationsHistoryResponseSchema,
+  type ConversationsHistoryResponse,
+  type ConversationsHistoryMessage,
+  conversationsListResponseSchema,
+  type ConversationsListResponse,
+  type ConversationListItem,
+} from "./schema.response.js";
+
 /** @see https://docs.slack.dev/reference/methods/search.messages/ */
 export const searchMessagesParamsSchema = z.object({
   /** 検索クエリ（必須） */
@@ -26,6 +38,19 @@ export const searchMessagesParamsSchema = z.object({
   /** 検索対象のチームID。Enterprise Grid の org token 時は必須 */
   team_id: z.string().optional(),
 });
+
+/** 独自機能「mentions-to-bot」用。botId は CLI では不要（run 内で auth.test から取得）。query は省略可。 */
+const searchMessagesToBotParamsSchema = searchMessagesParamsSchema
+  .omit({ query: true })
+  .merge(
+    z.object({
+      botId: z.string().min(1).optional(),
+      query: z
+        .string()
+        .transform((s) => s.trim())
+        .optional(),
+    }),
+  );
 
 /**
  * conversations.history API パラメータ。
@@ -92,6 +117,9 @@ export const botTokenSchema = z
 
 export type ChatPostMessageParams = z.infer<typeof chatPostMessageParamsSchema>;
 export type SearchMessagesParams = z.infer<typeof searchMessagesParamsSchema>;
+export type SearchMessagesToBotParams = z.infer<
+  typeof searchMessagesToBotParamsSchema
+>;
 export type ConversationsHistoryParams = z.infer<
   typeof conversationsHistoryParamsSchema
 >;
@@ -99,6 +127,7 @@ export type ConversationsListParams = z.infer<
   typeof conversationsListParamsSchema
 >;
 
+/** Slack API メソッド名（SlackEndpoints と cliArgsSchema で使用）。 */
 const KIND = [
   "chat.postMessage",
   "conversations.history",
@@ -106,8 +135,20 @@ const KIND = [
   "search.messages",
   "auth.test",
 ] as const;
-export const kindSchema = z.enum(KIND);
-/** CLI 用: kind で判別する union。parseArgs で safeParseArgs に渡す raw に kind を含める。 */
+type Kind = (typeof KIND)[number];
+export type SlackEndpoints = `/${Kind}`;
+
+/** CLI の第一引数で指定できるサブコマンド。Slack API メソッド + 独自機能（mentions-to-bot）。 */
+export const CLI_SUBCOMMANDS = [
+  KIND[0],
+  KIND[1],
+  KIND[2],
+  KIND[3],
+  "mentions-to-bot",
+] as const;
+export const subcommandSchema = z.enum(CLI_SUBCOMMANDS);
+
+/** CLI 用: Slack API にそのまま対応するコマンドのみ。独自機能は Parsed で別扱い。 */
 export const cliArgsSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal(KIND[0]) }).merge(chatPostMessageParamsSchema),
   z
@@ -115,15 +156,15 @@ export const cliArgsSchema = z.discriminatedUnion("kind", [
     .merge(conversationsHistoryParamsSchema),
   z.object({ kind: z.literal(KIND[2]) }).merge(conversationsListParamsSchema),
   z.object({ kind: z.literal(KIND[3]) }).merge(searchMessagesParamsSchema),
+  z
+    .object({ kind: z.literal("mentions-to-bot") })
+    .merge(searchMessagesToBotParamsSchema),
 ]);
-
-type Kind = (typeof KIND)[number];
-export type SlackEndpoints = `/${Kind}`;
 
 export type CliArgs = z.infer<typeof cliArgsSchema>;
 export const safeParse =
   <
-    T extends Kind | "commandline" | "kind",
+    T extends Kind | "commandline" | "kind" | "mentions-to-bot",
     S extends ZodObject | ZodUnion | ZodEnum,
     U = z.infer<S>,
   >(
@@ -137,7 +178,6 @@ export const safeParse =
     }
     return ret.data as U;
   };
-export const safeParseKind = safeParse("kind", kindSchema);
 
 export const safeParseChatPostMessageParams = safeParse(
   "chat.postMessage",
@@ -154,6 +194,10 @@ export const safeParseConversationsHistoryParams = safeParse(
 export const safeParseSearchMessagesParams = safeParse(
   "search.messages",
   searchMessagesParamsSchema,
+);
+export const safeParseSearchMessagesToBotParams = safeParse(
+  "mentions-to-bot",
+  searchMessagesToBotParamsSchema,
 );
 
 export const safeParseArgs = safeParse("commandline", cliArgsSchema);

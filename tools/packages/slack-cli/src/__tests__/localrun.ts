@@ -1,10 +1,17 @@
+import child_process from "child_process";
+import path from "path";
 import * as dotenv from "dotenv";
 
 dotenv.config({ path: "../../../../../.env" });
+dotenv.config({ path: path.resolve(__dirname, "./.env") });
 
-import child_process from "child_process";
-
-const userId = process.env.LOCALRUN_USER_ID ?? "W017K76C2GZ"; // 自分宛メンション検索用
+const userId = process.env.LOCALRUN_USER_ID;
+if (!userId) {
+  console.error(
+    "LOCALRUN_USER_ID を設定してください（メンション検索対象の Slack user ID）",
+  );
+  process.exit(1);
+}
 
 // search.messages でメンション検索（mentions:USER_ID）。--count を指定可能
 const result = child_process.spawnSync(

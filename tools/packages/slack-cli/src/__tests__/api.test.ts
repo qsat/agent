@@ -9,7 +9,7 @@ describe("slackClient", () => {
     vi.stubGlobal("fetch", fetchMock);
   });
 
-  it("listChannels calls conversations.list with opt.token and expected URL", async () => {
+  it("listConversations calls conversations.list with types filter", async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -22,7 +22,10 @@ describe("slackClient", () => {
       token: "xoxb-token",
       baseUrl: "https://slack.com/api",
     });
-    const result = (await client.listChannels()) as Record<string, unknown>;
+    const result = (await client.listConversations({
+      limit: 10,
+      types: "public_channel,private_channel",
+    })) as Record<string, unknown>;
     expect(result.ok).toBe(true);
     expect((result.channels as unknown[])[0]).toEqual({
       id: "C1",
@@ -50,7 +53,7 @@ describe("slackClient", () => {
       token: "xoxb-token",
       baseUrl: "https://slack.com/api",
     });
-    await client.listConversations();
+    await client.listConversations({});
     expect(fetchMock).toHaveBeenCalledWith(
       "https://slack.com/api/conversations.list?limit=10",
       expect.objectContaining({
@@ -76,10 +79,10 @@ describe("slackClient", () => {
       token: "xoxb-token",
       baseUrl: "https://slack.com/api",
     });
-    const result = (await client.postMessage("C123", "hello")) as Record<
-      string,
-      unknown
-    >;
+    const result = (await client.postMessage({
+      channel: "C123",
+      text: "hello",
+    })) as Record<string, unknown>;
     expect(result.ok).toBe(true);
     expect(result.channel).toBe("C123");
     expect(fetchMock).toHaveBeenCalledWith(

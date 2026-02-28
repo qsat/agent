@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 import minimist from "minimist";
-import { spacesList, pageGet, searchCql, ConfluenceClientOpt } from "./api.js";
+import {
+  spacesList,
+  pageGet,
+  searchCql,
+  userCurrent,
+  ConfluenceClientOpt,
+} from "./api.js";
 import { helpText } from "./help-text.js";
 import type { CliArgs } from "./schemas.js";
 import { safeParseArgs, safeParseKind } from "./schemas.js";
@@ -24,7 +30,8 @@ function getOpt(): ConfluenceClientOpt {
   if (!token) err("CONFLUENCE_TOKEN must be set");
   return {
     baseUrl: base.replace(/\/$/, ""),
-    auth: { user, token },
+    user,
+    token,
   };
 }
 
@@ -66,6 +73,10 @@ async function run(parsed: Parsed): Promise<void> {
 
     case "search": {
       return out(await searchCql(parsed.cql, parsed));
+    }
+
+    case "user.current": {
+      return out(await userCurrent(parsed));
     }
 
     default: {

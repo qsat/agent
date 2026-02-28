@@ -44,11 +44,12 @@ async function confluenceFetch(
   o: ConfluenceClientOpt,
   query?: QueryParams,
 ): Promise<unknown> {
-  const url = `${o.baseUrl}/rest/api/content${path}${toQueryString(query ?? {})}`;
+  const url = `${o.baseUrl}/rest/api${path}${toQueryString(query ?? {})}`;
   const res = await fetch(url, {
     headers: {
       Authorization: authHeader(o),
       "Content-Type": "application/json",
+      Accept: "application/json",
     },
   });
   if (!res.ok) {
@@ -59,14 +60,14 @@ async function confluenceFetch(
 }
 
 export async function spacesList(o: ConfluenceClientOpt): Promise<unknown> {
-  return confluenceFetch("/space", o, { limit: 1000 });
+  return confluenceFetch("/content/space", o, { limit: 1000 });
 }
 
 export async function pageGet(
   pageId: string,
   o: ConfluenceClientOpt,
 ): Promise<unknown> {
-  return confluenceFetch(`/${pageId}`, o, {
+  return confluenceFetch(`/content/${pageId}`, o, {
     expand: "body.storage,version",
   });
 }
@@ -75,5 +76,10 @@ export async function searchCql(
   cql: string,
   o: ConfluenceClientOpt,
 ): Promise<unknown> {
-  return confluenceFetch("/search", o, { cql, limit: 20 });
+  return confluenceFetch("/content/search", o, { cql, limit: 20 });
+}
+
+/** 認証中のユーザー情報を取得（accountId 含む）。 */
+export async function userCurrent(o: ConfluenceClientOpt): Promise<unknown> {
+  return confluenceFetch("/user/current", o);
 }

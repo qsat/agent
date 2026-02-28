@@ -14,7 +14,9 @@ export const searchParamsSchema = z.object({
   cql: z.string().min(1),
 });
 
-const KIND = ["spaces.list", "page.get", "search"] as const;
+export const userCurrentParamsSchema = z.object({});
+
+const KIND = ["spaces.list", "page.get", "search", "user.current"] as const;
 export const kindSchema = z.enum(KIND);
 
 /** CLI 用: kind で判別する union。parseArgs で safeParseArgs に渡す raw に kind を含める。 */
@@ -22,6 +24,7 @@ export const cliArgsSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("spaces.list") }),
   z.object({ kind: z.literal("page.get") }).merge(pageGetParamsSchema),
   z.object({ kind: z.literal("search") }).merge(searchParamsSchema),
+  z.object({ kind: z.literal("user.current") }),
 ]);
 
 export type CliArgs = z.infer<typeof cliArgsSchema>;
