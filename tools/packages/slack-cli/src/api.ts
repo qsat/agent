@@ -3,6 +3,7 @@ import type {
   ConversationsHistoryParams,
   ConversationsListParams,
   ChatPostMessageParams,
+  LookupUserByEmailParams,
 } from "./schemas.js";
 import {
   safeParseSearchMessagesParams,
@@ -15,6 +16,7 @@ import {
   conversationsHistoryResponseSchema,
   conversationsListResponseSchema,
   safeParseSearchMessagesToUserParams,
+  lookupUserByEmailParamsSchema,
 } from "./schemas.js";
 
 export type { SlackClientOpt };
@@ -40,6 +42,7 @@ export type {
   ConversationsListParams,
   ConversationsListResponse,
   ChatPostMessageParams,
+  LookupUserByEmailParams,
 } from "./schemas.js";
 
 /** @see https://docs.slack.dev/reference/methods/search.messages/ */
@@ -125,6 +128,20 @@ function chatPostMessage(
   });
 }
 
+/** @see https://api.slack.com/methods/users.lookupByEmail (users:read.email が必要。Bot では利用不可) */
+async function lookupUserByEmail(
+  baseUrl: string,
+  token: string,
+  params: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const parsed = lookupUserByEmailParamsSchema.parse(params);
+  return slackFetch("/users.lookupByEmail", {
+    method: "GET" as const,
+    query: { email: parsed.email },
+    opt: { baseUrl, token },
+  });
+}
+
 function createBaseClient(baseUrl: string, token: string) {
   return {
     authTest: () => authTest(baseUrl, token),
@@ -150,6 +167,9 @@ export function slackUserClient(opt: SlackClientOpt) {
     /** 指定 User へのメンションを search.messages で検索。search:read が必要。userId は呼び出し元で auth.test または --user-id から渡す。 */
     searchMentionToUser: (opts: Record<string, unknown>) =>
       searchMessagesMentionToUser(baseUrl, token, opts),
+    /** メールアドレスでユーザーを検索。users:read.email が必要。Bot トークンでは利用不可。 */
+    lookupUserByEmail: (params: LookupUserByEmailParams) =>
+      lookupUserByEmail(baseUrl, token, params),
   };
 }
 

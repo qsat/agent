@@ -143,6 +143,15 @@ export type ConversationsListParams = z.infer<
   typeof conversationsListParamsSchema
 >;
 
+/** @see https://api.slack.com/methods/users.lookupByEmail */
+export const lookupUserByEmailParamsSchema = z.object({
+  email: z.string().min(1),
+});
+
+export type LookupUserByEmailParams = z.infer<
+  typeof lookupUserByEmailParamsSchema
+>;
+
 /** Slack API メソッド名（SlackEndpoints と cliArgsSchema で使用）。 */
 const KIND = [
   "chat.postMessage",
@@ -150,6 +159,7 @@ const KIND = [
   "conversations.list",
   "search.messages",
   "auth.test",
+  "users.lookupByEmail",
 ] as const;
 type Kind = (typeof KIND)[number];
 export type SlackEndpoints = `/${Kind}`;
