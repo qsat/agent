@@ -6,6 +6,7 @@ import {
   safeParseArgs,
   safeParseChatPostMessageParams,
   safeParseSearchMessagesParams,
+  safeParseSearchMessagesToUserParams,
   subcommandSchema,
 } from "./schemas.js";
 
@@ -23,9 +24,13 @@ function getTokenForBotScoped() {
   return token;
 }
 
-/** コマンドに応じて使うトークンを返す。search.messages / mentions-to-bot は User Token、それ以外は Bot Token 優先。 */
+/** コマンドに応じて使うトークンを返す。search.messages / mentions-to-bot / mentions-to-user は User Token、それ以外は Bot Token 優先。 */
 function getToken(sub: string | undefined) {
-  if (sub === "search.messages" || sub === "mentions-to-bot")
+  if (
+    sub === "search.messages" ||
+    sub === "mentions-to-bot" ||
+    sub === "mentions-to-user"
+  )
     return getTokenForUserScoped();
   return getTokenForBotScoped();
 }
@@ -55,13 +60,13 @@ function err(msg: string | Error): never {
 /**
  * パース済み CLI 引数。
  * - help: ヘルプ表示
- * - CliArgs: Slack API メソッド（chat.postMessage, conversations.*, search.messages）+ 独自機能（mentions-to-bot）
+ * - CliArgs: Slack API メソッド（chat.postMessage, conversations.*, search.messages）+ 独自機能（mentions-to-bot, mentions-to-user）
  */
 type Parsed = ({ kind: "help" } & SlackClientOpt) | (CliArgs & SlackClientOpt);
 
 /**
- * コマンドライン引数をパース・チェックする。不正な場合は err() で終了する。
- * Slack API コマンドは safeParseArgs、独自機能 mentions-to-bot は safeParseSearchMessagesToBotParams で検証。
+ * コマンドライン引数をパース・チェックする。不正な場合は Zod が throw。
+ * 不正な場合は safeParse 内で throw。
  */
 function parseArgs(): Parsed {
   const argv = minimist(process.argv.slice(2));
@@ -76,7 +81,8 @@ function parseArgs(): Parsed {
 
   const kind = subcommandSchema.parse(sub);
   const query = argv.query ?? rest[0];
-  const raw = { ...argv, kind, query };
+  const userId = argv["user-id"] ?? argv.userId;
+  const raw = { ...argv, kind, query, userId };
   return { ...safeParseArgs(raw), ...common };
 }
 
@@ -121,12 +127,15 @@ async function run(parsed: Parsed): Promise<void> {
     case "mentions-to-bot": {
       const botToken = getTokenForBotScoped();
       const botOpt = { token: botToken, baseUrl };
-      const { user_id: botId } = await slackBotClient(botOpt).authTest();
-      if (!botId) {
-        return err("auth.test did not return user_id (check SLACK_BOT_TOKEN)");
-      }
-      const p = { ...parsed, botId };
-      const res = await slackUserClient(opt).searchMentionToBot(p);
+      const { user_id: botUserId } = await slackBotClient(botOpt).authTest();
+      const _p = { ...parsed, userId: botUserId };
+      const p = safeParseSearchMessagesToUserParams(_p);
+      const res = await slackUserClient(opt).searchMentionToUser(p);
+      return out(res);
+    }
+    case "mentions-to-user": {
+      const p = safeParseSearchMessagesToUserParams(parsed);
+      const res = await slackUserClient(opt).searchMentionToUser(p);
       return out(res);
     }
 

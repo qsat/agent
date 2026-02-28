@@ -39,12 +39,25 @@ export const searchMessagesParamsSchema = z.object({
   team_id: z.string().optional(),
 });
 
-/** 独自機能「mentions-to-bot」用。botId は CLI では不要（run 内で auth.test から取得）。query は省略可。 */
+/** 独自機能「mentions-to-user」用。userId 必須（--user-id で指定）。query は省略可。 */
+const searchMessagesToUserParamsSchema = searchMessagesParamsSchema
+  .omit({ query: true })
+  .merge(
+    z.object({
+      userId: z.string().min(1),
+      query: z
+        .string()
+        .transform((s) => s.trim())
+        .optional(),
+    }),
+  );
+
+/** 独自機能「mentions-to-bot」用。userId は run 内で auth.test から取得するため省略可。query は省略可。 */
 const searchMessagesToBotParamsSchema = searchMessagesParamsSchema
   .omit({ query: true })
   .merge(
     z.object({
-      botId: z.string().min(1).optional(),
+      userId: z.string().min(1).optional(),
       query: z
         .string()
         .transform((s) => s.trim())
@@ -117,6 +130,9 @@ export const botTokenSchema = z
 
 export type ChatPostMessageParams = z.infer<typeof chatPostMessageParamsSchema>;
 export type SearchMessagesParams = z.infer<typeof searchMessagesParamsSchema>;
+export type SearchMessagesToUserParams = z.infer<
+  typeof searchMessagesToUserParamsSchema
+>;
 export type SearchMessagesToBotParams = z.infer<
   typeof searchMessagesToBotParamsSchema
 >;
@@ -145,6 +161,7 @@ export const CLI_SUBCOMMANDS = [
   KIND[2],
   KIND[3],
   "mentions-to-bot",
+  "mentions-to-user",
 ] as const;
 export const subcommandSchema = z.enum(CLI_SUBCOMMANDS);
 
@@ -159,12 +176,20 @@ export const cliArgsSchema = z.discriminatedUnion("kind", [
   z
     .object({ kind: z.literal("mentions-to-bot") })
     .merge(searchMessagesToBotParamsSchema),
+  z
+    .object({ kind: z.literal("mentions-to-user") })
+    .merge(searchMessagesToUserParamsSchema),
 ]);
 
 export type CliArgs = z.infer<typeof cliArgsSchema>;
 export const safeParse =
   <
-    T extends Kind | "commandline" | "kind" | "mentions-to-bot",
+    T extends
+      | Kind
+      | "commandline"
+      | "kind"
+      | "mentions-to-bot"
+      | "mentions-to-user",
     S extends ZodObject | ZodUnion | ZodEnum,
     U = z.infer<S>,
   >(
@@ -194,6 +219,10 @@ export const safeParseConversationsHistoryParams = safeParse(
 export const safeParseSearchMessagesParams = safeParse(
   "search.messages",
   searchMessagesParamsSchema,
+);
+export const safeParseSearchMessagesToUserParams = safeParse(
+  "mentions-to-user",
+  searchMessagesToUserParamsSchema,
 );
 export const safeParseSearchMessagesToBotParams = safeParse(
   "mentions-to-bot",

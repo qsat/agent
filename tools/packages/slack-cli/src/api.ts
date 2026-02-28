@@ -11,15 +11,10 @@ import {
   safeParseChatPostMessageParams,
   userTokenSchema,
   botTokenSchema,
-  safeParseSearchMessagesToBotParams,
   searchMessagesResponseSchema,
   conversationsHistoryResponseSchema,
   conversationsListResponseSchema,
-} from "./schemas.js";
-import type {
-  SearchMessagesResponse,
-  ConversationsHistoryResponse,
-  ConversationsListResponse,
+  safeParseSearchMessagesToUserParams,
 } from "./schemas.js";
 
 export type { SlackClientOpt };
@@ -52,7 +47,7 @@ async function searchMessages(
   baseUrl: string,
   token: string,
   params: Record<string, unknown>,
-): Promise<SearchMessagesResponse> {
+) {
   const auth = await authTest(baseUrl, token);
   const parsed = safeParseSearchMessagesParams(params);
   const team_id = parsed.team_id ?? auth.team_id;
@@ -64,22 +59,24 @@ async function searchMessages(
   return searchMessagesResponseSchema.parse(raw);
 }
 
-async function searchMessagesMentionToBot(
+async function searchMessagesMentionToUser(
   baseUrl: string,
   token: string,
   params: Record<string, unknown>,
 ) {
-  const parsed = safeParseSearchMessagesToBotParams(params);
-  if (!parsed.botId) {
-    throw new Error("botId is required for searchMentionToBot (e.g. from auth.test)");
+  const parsed = safeParseSearchMessagesToUserParams(params);
+  if (!parsed.userId) {
+    throw new Error(
+      "userId is required for searchMentionToUser (e.g. from auth.test or --user-id)",
+    );
   }
-  const query = `mentions:${parsed.botId} ${parsed.query ?? ""}`.trim();
+  const query = `mentions:${parsed.userId} ${parsed.query ?? ""}`.trim();
   const ret = await searchMessages(baseUrl, token, { ...parsed, query });
 
   const matches = ret.messages.matches;
   if (!matches.length) return ret;
 
-  const p = `<@${parsed.botId}>`;
+  const p = `<@${parsed.userId}>`;
   const mat = matches.filter((m) => (m.text ?? "").includes(p));
   return { ...ret, messages: { ...ret.messages, matches: mat } };
 }
@@ -150,9 +147,9 @@ export function slackUserClient(opt: SlackClientOpt) {
     /** 任意のクエリで search.messages を実行。search:read が必要。引数は Zod の safeParse で検証する。 */
     search: (opts: Record<string, unknown>) =>
       searchMessages(baseUrl, token, opts),
-    /** Bot へのメンションを search.messages で検索。search:read が必要。botId は呼び出し元で auth.test から取得して渡す。 */
-    searchMentionToBot: (opts: Record<string, unknown>) =>
-      searchMessagesMentionToBot(baseUrl, token, opts),
+    /** 指定 User へのメンションを search.messages で検索。search:read が必要。userId は呼び出し元で auth.test または --user-id から渡す。 */
+    searchMentionToUser: (opts: Record<string, unknown>) =>
+      searchMessagesMentionToUser(baseUrl, token, opts),
   };
 }
 

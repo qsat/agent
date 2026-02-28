@@ -8,11 +8,13 @@ export const helpText = {
     "chat.postMessage [options]    - メッセージ投稿",
   ],
   "独自機能（本 CLI で追加したコマンド）": [
-    "mentions-to-bot [options]     - Bot へのメンション検索 (User Token。内部で search.messages を使用)",
+    "mentions-to-bot [options]     - Bot へのメンション検索（auth.test で Bot user_id 取得）",
+    "mentions-to-user [options]    - 指定 User へのメンション検索（--user-id で User ID 指定）",
   ],
   commands: [
     "search.messages --query <string> [--count N] [--highlight] [--page N] [--cursor C] [--sort score|timestamp] [--sort_dir asc|desc] [--team_id T]",
     "mentions-to-bot [--query <string>] [--count N] [--highlight] [--page N] [--cursor C] [--sort score|timestamp] [--sort_dir asc|desc] [--team_id T]",
+    "mentions-to-user --user-id <User ID> [--query <string>] [--count N] [--highlight] [--page N] [--cursor C] [--sort score|timestamp] [--sort_dir asc|desc] [--team_id T]",
     "conversations.list",
     "conversations.history --channel <id> [--oldest <ts>] [--latest <ts>] [--limit N] [--cursor C] [--inclusive] [--include_all_metadata]",
     "chat.postMessage --channel <id> --text <msg>",
@@ -26,5 +28,8 @@ export const helpText = {
   "mentions-to-bot（独自機能）": [
     "Bot の user_id は auth.test（SLACK_BOT_TOKEN）で自動取得。検索クエリは mentions:<bot_id>、さらに --query で絞り込み可能。SLACK_USER_TOKEN + search:read と SLACK_BOT_TOKEN が必要。",
   ],
-  env: "SLACK_BOT_TOKEN, SLACK_USER_TOKEN. mentions-to-bot は両方必須. search.messages は User Token. SLACK_API_BASE_URL (optional)",
+  "mentions-to-user（独自機能）": [
+    "指定した User ID（例: U01234）を --user-id で指定。検索クエリは mentions:<user_id>、さらに --query で絞り込み可能。SLACK_USER_TOKEN + search:read が必要。",
+  ],
+  env: "SLACK_BOT_TOKEN, SLACK_USER_TOKEN. mentions-to-bot は両方必須. search.messages / mentions-to-user は User Token. SLACK_API_BASE_URL (optional)",
 };
