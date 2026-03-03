@@ -66,6 +66,25 @@ docker compose --profile cli run --rm openclaw-cli dashboard --no-open
   - スキル: `config/workspace/skills/` に GitHub・Slack・Confluence 読み・Jira 読み用スキルを配置。トークン・ホスト名は `.env` で管理（`.env.example` 参照）。Docker で `gh` を使う場合はイメージに `gh` を入れ、`GH_TOKEN` を環境変数で渡す
 - ゲートウェイはブリッジ＋ポートマッピングでホストの `localhost:18789` に公開
 
+## Playwright CLI（ホスト Chrome + CDP）
+
+エージェントからブラウザ操作をする場合は **playwright-cli** スキルを使います。ブラウザは**コンテナ内ではなくホストの Chrome**を、新規プロファイルで起動し、**CDP** で操作します。
+
+**一括起動・停止**: `make start` で CDP 設定更新・Docker コンテナ・Chrome をまとめて起動、`make stop` で Chrome とコンテナをまとめて停止できます。
+
+1. **起動**  
+   **推奨**: `make start` で `cli.config.json` 生成 → `docker compose up -d` → Chrome（CDP）起動まで一括実行。  
+   コンテナのみ起動する場合は `make up`。初回や Dockerfile 変更後は `docker compose up -d --build` を実行してください。
+2. **Chrome を単体で起動する場合**
+   ```bash
+   ./scripts/start-chrome-debug.sh
+   ```
+   既に CDP が応答している場合は何もしない。応答していない場合はポートを解放してから Chrome を起動する（起動チェック・必要時再起動）。**常時起動を保ちたい場合**は、一定間隔で実行する `./scripts/watch-chrome-debug.sh` を使う（デフォルト 60 秒間隔。引数で秒数指定可）。cron で定期実行する場合は `CHROME_BACKGROUND=1 ./scripts/start-chrome-debug.sh` とする。
+   Chrome は `--remote-debugging-address=0.0.0.0` で 9222 を待ち受け。`make up` により `config/workspace/.playwright/cli.config.json` の `cdpEndpoint` は **host-gateway** で取得したホスト IP（コンテナから `host.docker.internal` を解決した値）に自動設定される。取得に失敗した場合は 192.168.65.254 を使用。環境変数 `CDP_HOST_IP` を指定すればその値を優先する。
+3. エージェントが `exec` で `playwright-cli` を実行すると、ホストの Chrome が操作される。検索は `open "https://www.google.com/search?q=検索語"` で検索結果ページに直接移動できる。
+
+詳細は `config/workspace/skills/playwright-cli/SKILL.md` を参照してください。
+
 ## OPENCLAW_GATEWAY_TOKEN について
 
 **OPENCLAW_GATEWAY_TOKEN** は、ゲートウェイに接続するための**認証トークン**です。

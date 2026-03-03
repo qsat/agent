@@ -1,0 +1,13 @@
+# OpenClaw コンテナ内で playwright-cli を利用するためのイメージ
+# ブラウザはコンテナ内に含めず、ホストの Chrome を CDP で操作する想定
+ARG OPENCLAW_IMAGE=ghcr.io/openclaw/openclaw:main
+FROM ${OPENCLAW_IMAGE}
+
+USER root
+
+# CDP 接続用に playwright-cli のみインストール（ブラウザはホスト側 Chrome を使用）
+RUN npm install -g @playwright/cli@latest
+
+USER node
+
+RUN playwright-cli --help > /dev/null

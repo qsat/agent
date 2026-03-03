@@ -4,7 +4,10 @@
 
 services:
   openclaw-gateway:
-    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:main}
+    image: ${OPENCLAW_IMAGE:-openclaw-playwright}
+    build:
+      context: .
+      dockerfile: docs/docker/Dockerfile.openclaw-playwright
     container_name: openclaw-gateway
     environment:
       HOME: /home/node
@@ -29,7 +32,10 @@ services:
       - "node /home/node/.openclaw/patch-exec-host.js && node dist/index.js gateway --bind lan --port 18789"
 
   openclaw-cli:
-    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:main}
+    image: ${OPENCLAW_IMAGE:-openclaw-playwright}
+    build:
+      context: .
+      dockerfile: docs/docker/Dockerfile.openclaw-playwright
     container_name: openclaw-cli
     environment:
       HOME: /home/node
