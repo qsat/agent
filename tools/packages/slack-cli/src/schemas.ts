@@ -170,6 +170,7 @@ export const CLI_SUBCOMMANDS = [
   KIND[1],
   KIND[2],
   KIND[3],
+  KIND[5],
   "mentions-to-bot",
   "mentions-to-user",
 ] as const;
@@ -189,6 +190,9 @@ export const cliArgsSchema = z.discriminatedUnion("kind", [
   z
     .object({ kind: z.literal("mentions-to-user") })
     .merge(searchMessagesToUserParamsSchema),
+  z
+    .object({ kind: z.literal("users.lookupByEmail") })
+    .merge(lookupUserByEmailParamsSchema),
 ]);
 
 export type CliArgs = z.infer<typeof cliArgsSchema>;

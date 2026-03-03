@@ -1,4 +1,7 @@
 {
+  "env": {
+    "LLAMACPP_API_KEY": "llamacpp-local"
+  },
   "gateway": {
     "mode": "local",
     "controlUi": {
@@ -17,35 +20,26 @@
   "agents": {
     "defaults": {
       "model": {
-        "primary": "ollama/gpt-oss:20b",
-        "fallbacks": ["ollama/llama3.3:70b-instruct-q3_K_S"]
+        "primary": "llamacpp/qwen3.5-35b-a3b",
+        "fallbacks": []
       }
     }
   },
   "models": {
     "mode": "merge",
     "providers": {
-      "ollama": {
-        "baseUrl": "http://host.docker.internal:11434",
-        "apiKey": "ollama-local",
-        "api": "ollama",
+      "llamacpp": {
+        "baseUrl": "http://host.docker.internal:21434",
+        "apiKey": "llamacpp-local",
+        "api": "openai-completions",
         "models": [
           {
-            "id": "gpt-oss:20b",
-            "name": "GPT-OSS 20B",
+            "id": "qwen3.5-35b-a3b",
+            "name": "Qwen3.5 35B A3B (llama.cpp)",
             "reasoning": false,
-            "input": ["text"],
+            "input": ["text", "image"],
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
             "contextWindow": 32768,
-            "maxTokens": 8192
-          },
-          {
-            "id": "llama3.3:70b-instruct-q3_K_S",
-            "name": "Llama 3.3 70B Instruct",
-            "reasoning": false,
-            "input": ["text"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
-            "contextWindow": 131072,
             "maxTokens": 8192
           }
         ]
@@ -58,11 +52,11 @@
     }
   },
   "skills": {
-    "entries": [
-      {"name": "github", "enabled": true},
-      {"name": "slack", "enabled": true},
-      {"name": "confluence-read", "enabled": true},
-      {"name": "jira-read", "enabled": true}
-    ]
+    "entries": {
+      "github": { "enabled": true },
+      "slack": { "enabled": true },
+      "confluence-read": { "enabled": true },
+      "jira-read": { "enabled": true }
+    }
   }
 }

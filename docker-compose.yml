@@ -1,6 +1,6 @@
-# OpenClaw + ホスト上の Ollama (deepseek-r1:32b)
+# OpenClaw + ホスト上の llama-server (llama.cpp)
 # 利用: docker compose up -d
-# 前提: ホストに Ollama をインストールし、起動しておくこと
+# 前提: ホストで llama-server を起動しておくこと（例: ./config/run-llama-server.sh）
 
 services:
   openclaw-gateway:
@@ -10,7 +10,7 @@ services:
       HOME: /home/node
       TERM: xterm-256color
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
-      OLLAMA_API_KEY: ${OLLAMA_API_KEY:-ollama-local}
+      LLAMACPP_API_KEY: ${LLAMACPP_API_KEY:-llamacpp-local}
     volumes:
       - ${OPENCLAW_CONFIG_DIR:-./config}:/home/node/.openclaw
       - /var/run/docker.sock:/var/run/docker.sock
@@ -49,6 +49,22 @@ services:
     entrypoint: ["node", "dist/index.js"]
     profiles:
       - cli
+
+  playwright:
+    image: mcr.microsoft.com/playwright:latest
+    container_name: playwright-cli
+    working_dir: /work
+    volumes:
+      - .:/work
+    stdin_open: true
+    tty: true
+    entrypoint: []
+    # 例: docker compose run --rm playwright npx playwright test
+    # 例: docker compose run --rm playwright npx playwright install
+    # または: ./scripts/playwright-docker.sh test
+    command: ["npx", "playwright", "--version"]
+    profiles:
+      - playwright
 
 networks:
   openclaw-net:

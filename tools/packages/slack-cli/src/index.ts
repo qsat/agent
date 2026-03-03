@@ -24,12 +24,13 @@ function getTokenForBotScoped() {
   return token;
 }
 
-/** コマンドに応じて使うトークンを返す。search.messages / mentions-to-bot / mentions-to-user は User Token、それ以外は Bot Token 優先。 */
+/** コマンドに応じて使うトークンを返す。search.messages / mentions-to-bot / mentions-to-user / users.lookupByEmail は User Token、それ以外は Bot Token 優先。 */
 function getToken(sub: string | undefined) {
   if (
     sub === "search.messages" ||
     sub === "mentions-to-bot" ||
-    sub === "mentions-to-user"
+    sub === "mentions-to-user" ||
+    sub === "users.lookupByEmail"
   )
     return getTokenForUserScoped();
   return getTokenForBotScoped();
@@ -82,7 +83,8 @@ function parseArgs(): Parsed {
   const kind = subcommandSchema.parse(sub);
   const query = argv.query ?? rest[0];
   const userId = argv["user-id"] ?? argv.userId;
-  const raw = { ...argv, kind, query, userId };
+  const email = argv.email ?? argv["email"];
+  const raw = { ...argv, kind, query, userId, email };
   return { ...safeParseArgs(raw), ...common };
 }
 
@@ -139,6 +141,11 @@ async function run(parsed: Parsed): Promise<void> {
       return out(res);
     }
 
+    case "users.lookupByEmail": {
+      const res = await slackUserClient(opt).lookupUserByEmail(parsed);
+      return out(res);
+    }
+
     default: {
       return err(`Unknown command.  Use 'help' for usage.`);
     }
@@ -149,6 +156,6 @@ async function run(parsed: Parsed): Promise<void> {
   const args = parseArgs();
   await run(args);
 })().catch((e) => {
-  out(e);
+  console.error(e instanceof Error ? e.message : e);
   process.exit(1);
 });

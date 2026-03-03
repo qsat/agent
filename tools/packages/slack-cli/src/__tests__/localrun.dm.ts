@@ -4,8 +4,8 @@
  * 使い方:
  * - SLACK_DM_CHANNEL_ID を設定すると、その channel（D で始まる ID）の履歴を取得する。
  * - 未設定の場合は SLACK_DM_USER_EMAIL（必須）で
- *   users.lookupByEmail → conversations.open により DM channel を解決してから履歴を取得する。
- *   ※ Bot がその DM に参加している必要あり。users:read.email / im:read 等のスコープが必要な場合あり。
+ *   users.lookupByEmail（CLI）→ conversations.open により DM channel を解決してから履歴を取得する。
+ *   ※ この場合 SLACK_USER_TOKEN 必須（users.lookupByEmail は User Token のみ）。Bot がその DM に参加している必要あり。
  *
  * 実行: npm run localrun:dm （package ルートで）
  */
@@ -16,6 +16,7 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+dotenv.config({ path: path.join(__dirname, "../../../../.env") });
 dotenv.config({ path: path.join(__dirname, "../../../../../.env") });
 dotenv.config({ path: path.join(__dirname, "./.env") });
 
@@ -36,10 +37,28 @@ const authHeader = {
   "Content-Type": "application/json; charset=utf-8",
 };
 
-async function lookupUserByEmail(email: string): Promise<string> {
-  const url = `${baseUrl}/users.lookupByEmail?email=${encodeURIComponent(email)}`;
-  const res = await fetch(url, { headers: authHeader });
-  const data = (await res.json()) as {
+/** CLI の users.lookupByEmail を実行して user id を返す。従来の fetch と同じトークン（SLACK_USER_TOKEN または SLACK_TOKEN）を渡す。 */
+function lookupUserByEmail(email: string): string {
+  const userToken =
+    process.env.SLACK_USER_TOKEN ?? process.env.SLACK_TOKEN ?? "";
+  const envForLookup = { ...process.env, SLACK_USER_TOKEN: userToken };
+  const result = spawnSync(
+    "node",
+    ["dist/index.js", "users.lookupByEmail", "--email", email],
+    { cwd: pkgRoot, env: envForLookup, encoding: "utf-8" },
+  );
+  if (result.error) {
+    throw new Error(`lookupUserByEmail 実行エラー: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    const stderr = result.stderr?.trim() ?? "";
+    const stdout = result.stdout?.trim() ?? "";
+    const msg = [stderr, stdout].filter(Boolean).join("\n") || "unknown";
+    throw new Error(
+      `users.lookupByEmail failed (exit ${result.status}): ${msg}`,
+    );
+  }
+  const data = JSON.parse(result.stdout?.trim() ?? "{}") as {
     ok?: boolean;
     user?: { id: string };
     error?: string;
@@ -78,9 +97,17 @@ async function main(): Promise<void> {
       );
       process.exit(1);
     }
+    const userToken =
+      process.env.SLACK_USER_TOKEN ?? process.env.SLACK_TOKEN ?? "";
+    if (!userToken) {
+      console.error(
+        "email から DM を解決する場合は SLACK_USER_TOKEN または SLACK_TOKEN（User Token）が必須です（users.lookupByEmail は User Token のみ）。",
+      );
+      process.exit(1);
+    }
     console.log("DM channel を解決中（email は表示しません）");
     try {
-      const userId = await lookupUserByEmail(email);
+      const userId = lookupUserByEmail(email);
       console.log("user id:", userId);
       channelId = await openDmChannel(userId);
       console.log("DM channel id:", channelId);

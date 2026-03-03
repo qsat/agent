@@ -6,6 +6,7 @@ export const helpText = {
     "conversations.list            - 会話一覧",
     "conversations.history [options] - 会話（チャンネル）のメッセージ履歴取得",
     "chat.postMessage [options]    - メッセージ投稿",
+    "users.lookupByEmail [options] - メールアドレスでユーザー検索 (User Token, users:read.email)",
   ],
   "独自機能（本 CLI で追加したコマンド）": [
     "mentions-to-bot [options]     - Bot へのメンション検索（auth.test で Bot user_id 取得）",
@@ -15,6 +16,7 @@ export const helpText = {
     "search.messages --query <string> [--count N] [--highlight] [--page N] [--cursor C] [--sort score|timestamp] [--sort_dir asc|desc] [--team_id T]",
     "mentions-to-bot [--query <string>] [--count N] [--highlight] [--page N] [--cursor C] [--sort score|timestamp] [--sort_dir asc|desc] [--team_id T]",
     "mentions-to-user --user-id <User ID> [--query <string>] [--count N] [--highlight] [--page N] [--cursor C] [--sort score|timestamp] [--sort_dir asc|desc] [--team_id T]",
+    "users.lookupByEmail --email <email>",
     "conversations.list",
     "conversations.history --channel <id> [--oldest <ts>] [--latest <ts>] [--limit N] [--cursor C] [--inclusive] [--include_all_metadata]",
     "chat.postMessage --channel <id> --text <msg>",
@@ -31,5 +33,5 @@ export const helpText = {
   "mentions-to-user（独自機能）": [
     "指定した User ID（例: U01234）を --user-id で指定。検索クエリは mentions:<user_id>、さらに --query で絞り込み可能。SLACK_USER_TOKEN + search:read が必要。",
   ],
-  env: "SLACK_BOT_TOKEN, SLACK_USER_TOKEN. mentions-to-bot は両方必須. search.messages / mentions-to-user は User Token. SLACK_API_BASE_URL (optional)",
+  env: "SLACK_BOT_TOKEN, SLACK_USER_TOKEN. mentions-to-bot は両方必須. search.messages / mentions-to-user / users.lookupByEmail は User Token. SLACK_API_BASE_URL (optional)",
 };

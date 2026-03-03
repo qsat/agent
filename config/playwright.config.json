@@ -1,0 +1,21 @@
+{
+  "browser": {
+    "browserName": "chromium",
+    "isolated": false,
+    "cdpEndpoint": "http://localhost:9222",
+    "cdpTimeout": 2000
+  },
+
+  "outputMode": "stdout",
+
+  "network": {
+    "blockedOrigins": []
+  },
+
+  "timeouts": {
+    "action": 5000,
+    "navigation": 5000
+  },
+  "allowUnrestrictedFileAccess": false,
+  "codegen": "typescript"
+}
